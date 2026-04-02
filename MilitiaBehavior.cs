@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Helpers;
@@ -320,7 +320,7 @@ namespace BanditMilitias
 
             // --- Stuck detection: runs unconditionally for every BM every tick ---
             // Must be here, NOT inside BMThink, because BMThink is skipped when
-            // nearby bandits exist � which is always true when parties are clumping.
+            // nearby bandits exist — which is always true when parties are clumping.
             if (mobileParty.IsBM()
                 && !mobileParty.IsCurrentlyAtSea
                 && mobileParty.Ai?.IsDisabled == false
@@ -343,21 +343,28 @@ namespace BanditMilitias
                         {
                             StuckTracker.Remove(mobileParty);
 
+                            // GatePosition is the navmesh entry point — safe for SetMoveGoToPoint.
+                            // SetMovePatrolAroundSettlement must NOT be used here: it calls into
+                            // GetNavalPatrolBehavior → GetPathDistanceBetweenAIFaces in native code,
+                            // which crashes with AccessViolationException when the target settlement
+                            // has no valid land AI navmesh face (coastal/island hideouts etc.).
                             var escapePool = Hideouts
-                                .WhereQ(s => s != null && s.Position.ToVec2().Distance(currentPos2D) > EscapeMinDistance)
+                                .WhereQ(s => s != null
+                                    && s.GatePosition.ToVec2().Distance(currentPos2D) > EscapeMinDistance)
                                 .ToListQ();
 
                             if (escapePool.Count == 0)
                                 escapePool = Settlement.All
-                                    .WhereQ(s => s != null && !s.IsTown && !s.IsCastle
-                                        && s.Position.ToVec2().Distance(currentPos2D) > EscapeMinDistance)
+                                    .WhereQ(s => s != null
+                                        && !s.IsTown && !s.IsCastle
+                                        && s.GatePosition.ToVec2().Distance(currentPos2D) > EscapeMinDistance)
                                     .ToListQ();
 
                             if (escapePool.Count > 0)
                             {
                                 var escapeTarget = escapePool.GetRandomElement();
-                                Logger.LogDebug($"{mobileParty.Name}({mobileParty.StringId}) stuck {newCount}h � escaping to {escapeTarget.Name}");
-                                mobileParty.SetMovePatrolAroundSettlement(escapeTarget, MobileParty.NavigationType.Default, false);
+                                Logger.LogDebug($"{mobileParty.Name}({mobileParty.StringId}) stuck {newCount}h — escaping to {escapeTarget.Name}");
+                                mobileParty.SetMoveGoToPoint(escapeTarget.GatePosition, MobileParty.NavigationType.Default);
                                 return; // don't continue into merge logic this tick
                             }
                         }
@@ -590,7 +597,7 @@ namespace BanditMilitias
                         if (BM is null || mobileParty.MapFaction is null)
                             return;
 
-                        // Sea parties do not raid � they cannot reach inland villages
+                        // Sea parties do not raid — they cannot reach inland villages
                         if (mobileParty.IsCurrentlyAtSea)
                             break;
 

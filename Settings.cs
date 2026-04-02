@@ -24,11 +24,10 @@ namespace BanditMilitias
         [SettingPropertyGroup("{=BMSpawning}Spawning & Formation")]
         public int SpawnChance { get; private set; } = 1;
 
-        public int MinPartySize => MergeableSize * 2;
-
         [SettingPropertyInteger("{=BMMergeSize}Mergeable Party Size", 1, 100, Order = 2, RequireRestart = false, HintText = "{=BMMergeSizeDesc}Small looter and bandit parties won't merge.")]
         [SettingPropertyGroup("{=BMSpawning}Spawning & Formation")]
         public int MergeableSize { get; private set; } = 20;
+        public int MinPartySize => MergeableSize * 2;
 
         [SettingPropertyInteger("{=BMSplit}Random Daily Split Chance", 0, 100, Order = 3, RequireRestart = false, HintText = "{=BMSplitDesc}How likely every day Bandit Militias is to split when large enough.")]
         [SettingPropertyGroup("{=BMSpawning}Spawning & Formation")]
@@ -78,13 +77,13 @@ namespace BanditMilitias
 
         // ==================== POWER & BALANCE ====================
 
-        [SettingPropertyInteger("{=BMPower}Global Power", 0, 1000, Order = 0, RequireRestart = false, HintText = "{=BMPowerDesc}Major setting. Setting higher means more, bigger BMs.")]
+        [SettingPropertyInteger("{=BMPower}Global Power Percent", 1, 100, Order = 0, RequireRestart = false, HintText = "{=BMPowerDesc}Caps the total combat strength of all Bandit Militias combined as a percentage of all other parties in the world. Higher values allow more and stronger BMs but can noticeably impact world balance.")]
         [SettingPropertyGroup("{=BMPower}Power & Balance", GroupOrder = 2)]
-        public int GlobalPowerPercent { get; private set; } = 15;
+        public int GlobalPowerPercent { get; private set; } = 30;
 
-        [SettingPropertyInteger("{=BMMaxValue}Max Item Value", 1000, 1000000, Order = 1, RequireRestart = false, HintText = "{=BMMaxValueDesc}Limit the per-piece value of equipment given to the Heroes. Mostly for when other mods give you Hero loot.")]
+        [SettingPropertyInteger("{=BMMaxValue}Max Item Value", 1000, 100000, Order = 1, RequireRestart = false, HintText = "{=BMMaxValueDesc}Limit the per-piece value of equipment given to the Heroes. Mostly for when other mods give you Hero loot.")]
         [SettingPropertyGroup("{=BMPower}Power & Balance")]
-        public int MaxItemValue { get; private set; } = 2500;
+        public int MaxItemValue { get; private set; } = 3750;
 
         [SettingPropertyDropdown("{=BMGoldReward}Bandit Hero Gold Reward", Order = 2, RequireRestart = false)]
         [SettingPropertyGroup("{=BMPower}Power & Balance")]

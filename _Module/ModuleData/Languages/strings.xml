@@ -53,7 +53,7 @@
         <string id="BMUpgrade" text="Upgrade Units"/>
         <string id="BMUpgradeDesc" text="Upgrade (at most) this percentage of troops when training occurs."/>
         <string id="BMPower" text="Global Power"/>
-        <string id="BMPowerDesc" text="Major setting.  Setting higher means more, bigger BMs."/>
+        <string id="BMPowerDesc" text="Caps the total combat strength of all Bandit Militias combined as a percentage of all other parties in the world. Higher values allow more and stronger BMs but can noticeably impact world balance."/>
         <string id="BMTier" text="Max Training Tier"/>
         <string id="BMTierDesc" text="BM won't train any units past this tier."/>
         <string id="BMWeaker" text="Ignore Weaker Parties"/>
