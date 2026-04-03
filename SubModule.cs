@@ -97,22 +97,24 @@ namespace BanditMilitias
                 Settings.OnSettingsChanged += OnSettingsChanged;
         }
 
+        private static readonly MethodInfo _resetCached = AccessTools.Method(typeof(MobileParty), "ResetCached");
         private static void OnSettingsChanged()
         {
-            MethodInfo ResetCached = AccessTools.Method(typeof(MobileParty), "ResetCached");
             foreach (ModBanditMilitiaPartyComponent bm in Helper.GetCachedBMs(true).ToArrayQ())
             {
                 bm.ClearCachedName();
                 if (bm.MobileParty is null) continue;
-                // bm.MobileParty.SetCustomName(null);
-                ResetCached.Invoke(bm.MobileParty, null);
+                _resetCached.Invoke(bm.MobileParty, null);
             }
-
-            //Helper.RefreshTrackers();
         }
 
         public override void OnGameEnd(Game game)
         {
+            // Clear ALL static state when a game session ends, not just Heroes.
+            // This prevents Banners, BanditEquipment, and other large lists from
+            // accumulating across multiple save loads within the same process.
+            Globals.ClearGlobals();
+            Globals.Banners.Clear();          // Banners is readonly so ClearGlobals can't replace it
             Globals.Heroes.Clear();
             Settings.OnSettingsChanged -= OnSettingsChanged;
         }

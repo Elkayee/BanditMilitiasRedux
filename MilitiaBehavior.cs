@@ -191,8 +191,9 @@ namespace BanditMilitias
                 try
                 {
                     var regularBandits = MobileParty.AllBanditParties?.CountQ(p => p != null && !p.IsBM()) ?? 0;
-                    var militias = GetCachedBMs()?.CountQ() ?? 0;
-                    var leaderless = AllBMs?.CountQ(c => c?.MobileParty?.LeaderHero is null) ?? 0;
+                    var bms = GetCachedBMs().ToListQ();
+                    var militias = bms.Count;
+                    var leaderless = bms.CountQ(c => c?.MobileParty?.LeaderHero is null);
 
                     Logger.LogDebug($"Day {CampaignTime.Now.GetDayOfYear} Report: {regularBandits} regular bandits, {militias} bandit militias, {leaderless} leaderless militias.");
 
@@ -272,7 +273,7 @@ namespace BanditMilitias
                     return;
                 }
 
-                foreach (var BM in GetCachedBMs().WhereQ(bm =>
+                foreach (var BM in cachedBMs.WhereQ(bm =>
                              bm?.MobileParty != null && bm.MobileParty.Position.ToVec2().Distance(mobileParty.Position.ToVec2()) < EffectRadius))
                 {
                     if (BM?.Avoidance is null)
@@ -489,6 +490,9 @@ namespace BanditMilitias
                     return;
                 }
 
+                // compute once outside the loop — mobileParty roster doesn't change mid-loop
+                int mobilePartyMountedCount = NumMountedTroops(mobileParty.MemberRoster);
+
                 foreach (var target in nearbyBandits.OrderByQ(m => m.Position.ToVec2().Distance(mobileParty.Position.ToVec2())))
                 {
                     var militiaTotalCount = mobileParty.MemberRoster.TotalManCount + target.MemberRoster.TotalManCount;
@@ -507,7 +511,7 @@ namespace BanditMilitias
                             continue;
                     }
 
-                    if (NumMountedTroops(mobileParty.MemberRoster) + NumMountedTroops(target.MemberRoster) > militiaTotalCount / 2)
+                    if (mobilePartyMountedCount + NumMountedTroops(target.MemberRoster) > militiaTotalCount / 2)
                         continue;
 
                     mergeTarget = target;
@@ -564,19 +568,24 @@ namespace BanditMilitias
                     case AiBehavior.Hold:
                         if (mobileParty.TargetSettlement is null)
                         {
-                            var navType = mobileParty.IsCurrentlyAtSea
-                                ? MobileParty.NavigationType.Naval
-                                : MobileParty.NavigationType.Default;
+                            // FIX: Sea parties must never be assigned SetMovePatrolAroundSettlement
+                            // targeting a land settlement — GetNavalPatrolBehavior calls
+                            // GetPathDistanceBetweenAIFaces in native code which crashes with
+                            // AccessViolationException when no valid land navmesh face exists.
+                            if (mobileParty.IsCurrentlyAtSea)
+                                break;
 
                             var validSettlements = Settlement.All
-                                .WhereQ(s => s != null && s.Position.ToVec2().Distance(mobileParty.Position.ToVec2()) < settlementFindRange)
+                                .WhereQ(s => s != null
+                                    && !s.IsHideout
+                                    && s.GatePosition.ToVec2().Distance(mobileParty.Position.ToVec2()) < settlementFindRange)
                                 .ToListQ();
 
                             if (validSettlements.Count > 0)
                             {
                                 target = validSettlements.GetRandomElement();
-                                bool isTargetingPort = mobileParty.IsCurrentlyAtSea;
-                                mobileParty.SetMovePatrolAroundSettlement(target, navType, isTargetingPort);
+                                mobileParty.SetMovePatrolAroundSettlement(target,
+                                    MobileParty.NavigationType.Default, false);
                             }
                         }
                         break;
@@ -605,8 +614,7 @@ namespace BanditMilitias
                         if (Globals.Settings?.AllowPillaging == true
                             && mobileParty.LeaderHero is not null
                             && mobileParty.Party.EstimatedStrength > MilitiaPartyAveragePower
-                            && MBRandom.RandomFloat < (Globals.Settings?.PillagingChance ?? 0) * 0.01f
-                            && GetCachedBMs().CountQ(m => m.MobileParty.ShortTermBehavior is AiBehavior.RaidSettlement) < RaidCap)
+                            && MBRandom.RandomFloat < (Globals.Settings?.PillagingChance ?? 0) * 0.01f)
                         {
                             var raidingCount = GetCachedBMs().CountQ(m => m?.MobileParty?.ShortTermBehavior is AiBehavior.RaidSettlement);
 

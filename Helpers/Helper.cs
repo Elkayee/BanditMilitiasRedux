@@ -551,10 +551,11 @@ namespace BanditMilitias
                     .Field<List<MapEvent>>("_mapEvents").Value;
 
                 var eventsSnapshot = mapEvents.ToListQ();
+                var mapEventsSet = new HashSet<MapEvent>(mapEvents);
 
                 foreach (var mapEvent in eventsSnapshot)
                 {
-                    if (mapEvent is null || !mapEvents.Contains(mapEvent) || mapEvent.IsFinalized)
+                    if (mapEvent is null || !mapEventsSet.Contains(mapEvent) || mapEvent.IsFinalized)
                         continue;
 
                     var hasBMParties = mapEvent.InvolvedParties
@@ -639,12 +640,20 @@ namespace BanditMilitias
                 "bandit_saddle_desert"
             };
 
-            Mounts = Items.All.WhereQ(i => i.ItemType == ItemObject.ItemTypeEnum.Horse)
-                .WhereQ(i => !i.StringId.Contains("unmountable")).WhereQ(i => i.Value <= Globals.Settings.MaxItemValue).ToList();
-            Saddles = Items.All.WhereQ(i => i.ItemType == ItemObject.ItemTypeEnum.HorseHarness
-                                            && !i.StringId.Contains("mule")
-                                            && !verbotenSaddles.Contains(i.StringId)).WhereQ(i => i.Value <= Globals.Settings.MaxItemValue).ToList();
-            var all = Items.All.WhereQ(i =>
+            var allItems = Items.All.ToListQ();
+
+            Mounts = allItems.WhereQ(i => i.ItemType == ItemObject.ItemTypeEnum.Horse
+                && !i.StringId.Contains("unmountable")
+                && i.Value <= Globals.Settings.MaxItemValue).ToList();
+
+            Saddles = allItems.WhereQ(i => i.ItemType == ItemObject.ItemTypeEnum.HorseHarness
+                && !i.StringId.Contains("mule")
+                && !verbotenSaddles.Contains(i.StringId)
+                && i.Value <= Globals.Settings.MaxItemValue).ToList();
+            CamelSaddles = Saddles.WhereQ(s => s.StringId.Contains("camel")).ToList();
+            NonCamelSaddles = Saddles.WhereQ(s => !s.StringId.Contains("camel")).ToList();
+
+            var all = allItems.WhereQ(i =>
                     !i.IsCraftedByPlayer
                     && i.ItemType is not (ItemObject.ItemTypeEnum.Goods
                         or ItemObject.ItemTypeEnum.Horse
@@ -655,8 +664,9 @@ namespace BanditMilitias
                         or ItemObject.ItemTypeEnum.Invalid)
                     && i.ItemCategory.StringId != "garment"
                     && !i.StringId.EndsWith("blunt")
-                    && !i.StringId.Contains("sparring"))
-                .WhereQ(i => i.Value <= Globals.Settings.MaxItemValue).ToList();
+                    && !i.StringId.Contains("sparring")
+                    && i.Value <= Globals.Settings.MaxItemValue).ToList();
+
             var runningCivilizedMod = AppDomain.CurrentDomain.GetAssemblies().AnyQ(a => a.FullName.Contains("Civilized"));
             if (!runningCivilizedMod)
             {
@@ -681,7 +691,7 @@ namespace BanditMilitias
             // used for armour
             foreach (ItemObject.ItemTypeEnum itemType in Enum.GetValues(typeof(ItemObject.ItemTypeEnum)))
             {
-                ItemTypes[itemType] = Items.All.WhereQ(i =>
+                ItemTypes[itemType] = allItems.WhereQ(i =>
                     i.Type == itemType
                     && i.Value >= 1000
                     && i.Value <= Globals.Settings.MaxItemValue).ToList();
@@ -742,9 +752,9 @@ namespace BanditMilitias
                             haveBow = true;
                             gear[slot] = randomElement;
                             if (randomElement.Item.ItemType is ItemObject.ItemTypeEnum.Bow)
-                                gear[3] = new EquipmentElement(Arrows.ToList()[MBRandom.RandomInt(0, Arrows.Count)]);
+                                gear[3] = new EquipmentElement(Arrows[MBRandom.RandomInt(0, Arrows.Count)]);
                             else if (randomElement.Item.ItemType == ItemObject.ItemTypeEnum.Crossbow)
-                                gear[3] = new EquipmentElement(Bolts.ToList()[MBRandom.RandomInt(0, Bolts.Count)]);
+                                gear[3] = new EquipmentElement(Bolts[MBRandom.RandomInt(0, Bolts.Count)]);
                             continue;
                         }
 
@@ -800,12 +810,15 @@ namespace BanditMilitias
                 CalculatedMaxPartySize = Math.Max(medianSize, Math.Max(1, MobileParty.MainParty.MemberRoster.TotalManCount) * Variance);
                 LastCalculated = CampaignTime.Now.ToHours;
                 CalculatedGlobalPowerLimit = parties.SumQ(p => p.Party.EstimatedStrength) * Variance;
-                GlobalMilitiaPower = GetCachedBMs(true).SumQ(m => m.Party.EstimatedStrength);
+
+                // FIX: cache once — IEnumerable re-enumerates on every call
+                var cachedBMs = GetCachedBMs(true).ToListQ();
+                GlobalMilitiaPower = cachedBMs.SumQ(m => m.Party.EstimatedStrength);
 
                 MilitiaPowerPercent = CalculatedGlobalPowerLimit > 0
                     ? GlobalMilitiaPower / CalculatedGlobalPowerLimit * 100 : 0;
 
-                var bmCount = GetCachedBMs().CountQ();
+                var bmCount = cachedBMs.Count;
                 MilitiaPartyAveragePower = bmCount > 0 ? GlobalMilitiaPower / bmCount : 0;
             }
         }
@@ -843,9 +856,8 @@ namespace BanditMilitias
             }
 
             var maxValue = map.Values.Max();
-            var highest = map.WhereQ(x => x.Value == maxValue).SelectQ(x => x.Key);
-            var result = highest.ToList().GetRandomElement();
-            return result;
+            var highest = map.WhereQ(x => x.Value == maxValue).SelectQ(x => x.Key).ToListQ();
+            return highest[MBRandom.RandomInt(0, highest.Count)];
         }
 
         internal static void PrintInstructionsAroundInsertion(List<CodeInstruction> codes, int insertPoint, int insertSize, int adjacentNum = 5)
@@ -1022,33 +1034,38 @@ namespace BanditMilitias
             HeroAppearanceService.RandomizeAppearance(hero);
         }
 
-        // temporary "safety" bail-out, to be removed
         internal static void AdjustCavalryCount(TroopRoster troopRoster)
         {
             try
             {
                 var safety = 0;
-                while (safety++ < 200 && NumMountedTroops(troopRoster) - Convert.ToInt32(troopRoster.TotalManCount / 2) is var delta && delta > 0)
+                var mountedTroops = troopRoster.GetTroopRoster().WhereQ(c =>
+                    !c.Character.Equipment[10].IsEmpty
+                    && !c.Character.IsHero
+                    && c.Character.OriginalCharacter is null).ToListQ();
+                int mountedCount = mountedTroops.SumQ(e => e.Number);
+
+                while (safety++ < 200)
                 {
-                    var mountedTroops = troopRoster.GetTroopRoster().WhereQ(c =>
-                        !c.Character.Equipment[10].IsEmpty
-                        && !c.Character.IsHero
-                        && c.Character.OriginalCharacter is null).ToListQ();
-                    if (mountedTroops.Count == 0)
-                        break;
+                    int delta = mountedCount - Convert.ToInt32(troopRoster.TotalManCount / 2);
+                    if (delta <= 0) break;
+                    if (mountedTroops.Count == 0) break;
+
                     if (safety == 200)
                     {
                         InformationManager.DisplayMessage(new InformationMessage("Bandit Militias error.  Please open a bug report and include the file cavalry.txt from the mod folder.", new Color(1, 0, 0)));
                         var output = new StringBuilder();
-                        output.AppendLine($"NumMountedTroops(troopRoster) {NumMountedTroops(troopRoster)} - Convert.ToInt32(troopRoster.TotalManCount / 2) {Convert.ToInt32(troopRoster.TotalManCount / 2)}");
+                        output.AppendLine($"NumMountedTroops(troopRoster) {mountedCount} - Convert.ToInt32(troopRoster.TotalManCount / 2) {Convert.ToInt32(troopRoster.TotalManCount / 2)}");
                         mountedTroops.Do(t => output.AppendLine($"{t.Character}: {t.Number} ({t.WoundedNumber})"));
                         File.WriteAllText(ModuleHelper.GetModuleFullPath("BanditMilitias") + "cavalry.txt", output.ToString());
                     }
 
                     var element = mountedTroops.GetRandomElement();
-                    var count = MBRandom.RandomInt(1, delta + 1);
-                    count = Math.Min(element.Number, count);
+                    var count = Math.Min(element.Number, MBRandom.RandomInt(1, delta + 1));
                     troopRoster.AddToCounts(element.Character, -count);
+                    mountedCount -= count;
+                    if (element.Number - count <= 0)
+                        mountedTroops.Remove(element);
                 }
             }
             catch (Exception ex)
@@ -1077,12 +1094,9 @@ namespace BanditMilitias
             {
                 var mount = Mounts.GetRandomElement();
                 mobileParty.GetBM().Leader.BattleEquipment[10] = new EquipmentElement(mount);
-                if (mount.HorseComponent.Monster.MonsterUsage == "camel")
-                    mobileParty.GetBM().Leader.BattleEquipment[11] = new EquipmentElement(Saddles.WhereQ(saddle =>
-                        saddle.StringId.Contains("camel")).ToList().GetRandomElement());
-                else
-                    mobileParty.GetBM().Leader.BattleEquipment[11] = new EquipmentElement(Saddles.WhereQ(saddle =>
-                        !saddle.StringId.Contains("camel")).ToList().GetRandomElement());
+                mobileParty.GetBM().Leader.BattleEquipment[11] = mount.HorseComponent.Monster.MonsterUsage == "camel"
+                    ? new EquipmentElement(CamelSaddles.GetRandomElement())
+                    : new EquipmentElement(NonCamelSaddles.GetRandomElement());
             }
             Logger.LogDebug($"ConfigureMilitia: DONE");
         }

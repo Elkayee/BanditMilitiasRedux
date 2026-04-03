@@ -40,7 +40,7 @@ namespace BanditMilitias
 
         // ── Party & Hero Tracking ────────────────────────────────────────────────
 
-        internal static IEnumerable<ModBanditMilitiaPartyComponent> AllBMs;
+        internal static List<ModBanditMilitiaPartyComponent> AllBMs = new();
         internal static List<Hero> Heroes = new();
         internal static List<CharacterObject> HeroTemplates = new();
         internal static int RaidCap;
@@ -63,6 +63,8 @@ namespace BanditMilitias
         internal static List<ItemObject> Bolts = new();
         internal static List<ItemObject> Mounts;
         internal static List<ItemObject> Saddles;
+        internal static List<ItemObject> CamelSaddles;
+        internal static List<ItemObject> NonCamelSaddles;
 
         // ── Map & UI ─────────────────────────────────────────────────────────────
 
@@ -116,14 +118,17 @@ namespace BanditMilitias
             BanditEquipment = new();
             Arrows = new();
             Bolts = new();
+            Banners.Clear();
             LastCalculated = 0;
             PartyCacheInterval = 0;
             RaidCap = 0;
             HeroTemplates = new();
             Mounts = new();
             Saddles = new();
+            CamelSaddles = new();
+            NonCamelSaddles = new();
             Hideouts = new();
-            AllBMs = new ModBanditMilitiaPartyComponent[] { };
+            AllBMs = new List<ModBanditMilitiaPartyComponent>();
             StuckTracker.Clear();
 
             /*
