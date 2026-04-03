@@ -1340,6 +1340,7 @@ namespace BanditMilitias
             T.Restart();
             Logger.LogTrace("MapScreen.OnInitialize");
             ClearGlobals();
+            SubModule.CacheBanners();
             PopulateItems();
             Looters = Clan.BanditFactions.First(c => c.StringId == "looters");
             Wights = Clan.BanditFactions.FirstOrDefaultQ(c => c.StringId == "wights"); // ROT

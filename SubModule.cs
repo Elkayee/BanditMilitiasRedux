@@ -55,7 +55,7 @@ namespace BanditMilitias
 
         // need to cache the banners before CEK adds background colours which
         // causes custom banners to crash for reasons unknown
-        private static void CacheBanners()
+        internal static void CacheBanners()
         {
             for (var i = 0; i < 5000; i++)
             {
