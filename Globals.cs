@@ -14,7 +14,7 @@ using TaleWorlds.ObjectSystem;
 
 namespace BanditMilitias
 {
-    public struct Globals
+    public static class Globals
     {
         // ── Constants ────────────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ namespace BanditMilitias
         // ── Compatibility ────────────────────────────────────────────────────────
 
         // ArmsDealer compatibility
-        internal static CultureObject BlackFlag => MBObjectManager.Instance.GetObject<CultureObject>("ad_bandit_blackflag");
+        internal static CultureObject BlackFlag;
 
         // ── Difficulty / Gold Maps ────────────────────────────────────────────────
 

@@ -107,7 +107,7 @@ namespace BanditMilitias
 
             hero.UpdateHomeSettlement();
             HiddenInEncyclopedia(hero.CharacterObject) = true;
-            homeSettlement = hero.HomeSettlement;
+            homeSettlement = settlement;
             leader = hero;
         }
 

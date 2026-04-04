@@ -74,7 +74,6 @@ namespace BanditMilitias
         internal static readonly AccessTools.FieldRef<Hero, Settlement> _bornSettlement =
             AccessTools.FieldRefAccess<Hero, Settlement>("_bornSettlement");
 
-        // ReSharper disable once StringLiteralTypo
         internal static readonly AccessTools.FieldRef<CharacterObject, bool> HiddenInEncyclopedia =
             AccessTools.FieldRefAccess<CharacterObject, bool>("<HiddenInEncyclopedia>k__BackingField");
 
@@ -91,6 +90,18 @@ namespace BanditMilitias
             AccessTools.FieldRefAccess<Hero, HeroDeveloper>("_heroDeveloper");
         
         internal static readonly ConstructorInfo HeroDeveloperConstructor = AccessTools.Constructor(typeof(HeroDeveloper), [typeof(Hero)]);
+
+        private static readonly AccessTools.FieldRef<Hero, PropertyOwner<CharacterAttribute>> CharacterAttributesField =
+            AccessTools.FieldRefAccess<Hero, PropertyOwner<CharacterAttribute>>("_characterAttributes");
+
+        private static readonly AccessTools.FieldRef<Hero, PropertyOwner<SkillObject>> HeroSkillsField =
+            AccessTools.FieldRefAccess<Hero, PropertyOwner<SkillObject>>("_heroSkills");
+
+        private static readonly AccessTools.FieldRef<Hero, PropertyOwner<TraitObject>> HeroTraitsField =
+            AccessTools.FieldRefAccess<Hero, PropertyOwner<TraitObject>>("_heroTraits");
+
+        private static readonly AccessTools.FieldRef<Hero, PropertyOwner<PerkObject>> HeroPerksField =
+            AccessTools.FieldRefAccess<Hero, PropertyOwner<PerkObject>>("_heroPerks");
 
         private static PartyUpgraderCampaignBehavior UpgraderCampaignBehavior;
 
@@ -171,9 +182,13 @@ namespace BanditMilitias
             original.ItemRoster.Clear();
         }
 
+        internal static void ResetUpgraderBehavior()
+        {
+            UpgraderCampaignBehavior = null;
+        }
+
         private static void SplitRosters(TroopRoster roster1, TroopRoster roster2, TroopRosterElement rosterElement)
         {
-            // toss a coin (to your Witcher)
             if (rosterElement.Number == 1)
             {
                 if (MBRandom.RandomInt(0, 2) == 0)
@@ -212,7 +227,6 @@ namespace BanditMilitias
                     return;
                 }
 
-                // Heroes are only removed from the roster here, after all guards have passed
                 original.MemberRoster.RemoveIf(t => t.Character.IsHero);
 
                 for (int i = heroes.Count - 1; i >= 0; i--)
@@ -245,9 +259,9 @@ namespace BanditMilitias
                 var rosters2 = new[] { party2, prisoners2 };
                 InitMilitia(bm1, rosters1, original.Position);
                 InitMilitia(bm2, rosters2, original.Position);
-
-                bm1.GetBM().Avoidance = original.GetBM().Avoidance;
-                bm2.GetBM().Avoidance = original.GetBM().Avoidance;
+                var avoidanceCopy = new Dictionary<Hero, float>(original.GetBM().Avoidance);
+                bm1.GetBM().Avoidance = avoidanceCopy;
+                bm2.GetBM().Avoidance = new Dictionary<Hero, float>(avoidanceCopy);
                 Logger.LogDebug($"{original.Name}({original.StringId}) split into {bm1.Name}({bm1.StringId}) and {bm2.Name}({bm2.StringId})");
                 ItemRoster(bm1.Party) = inventory1;
                 ItemRoster(bm2.Party) = inventory2;
@@ -329,20 +343,30 @@ namespace BanditMilitias
                 Hero leaderHero = (mobileParty.LeaderHero?.Power ?? 0) >= (mergeTarget.LeaderHero?.Power ?? 0) ? mobileParty.LeaderHero : mergeTarget.LeaderHero;
                 Logger.LogDebug($"TryMergeParties: leaderHero={leaderHero?.Name.ToString() ?? "NULL"}");
 
+                bool mergedClanIsNaval = mobileParty.ActualClan?.HasNavalNavigationCapability == true
+                    || mergeTarget.ActualClan?.HasNavalNavigationCapability == true;
+
                 Settlement mobilePartyHomeSettlement = mobileParty.HomeSettlement?.IsHideout ?? false ? mobileParty.HomeSettlement : null;
                 Settlement mergeTargetHomeSettlement = mergeTarget.HomeSettlement?.IsHideout ?? false ? mergeTarget.HomeSettlement : null;
-                Settlement bestSettlement = leaderHero?.HomeSettlement ?? (mobileParty.Party.EstimatedStrength > mergeTarget.Party.EstimatedStrength ? mobilePartyHomeSettlement ?? mergeTargetHomeSettlement : mergeTargetHomeSettlement ?? mobilePartyHomeSettlement);
+                Settlement leaderHomeSettlement = leaderHero?.HomeSettlement?.IsHideout ?? false ? leaderHero.HomeSettlement : null;
+
+                Settlement bestSettlement = new[] { leaderHomeSettlement, mobilePartyHomeSettlement, mergeTargetHomeSettlement }
+                    .FirstOrDefault(s => s != null && s.StringId.StartsWith("hideout_seaside") == mergedClanIsNaval);
+
                 if (bestSettlement is null)
                 {
-                    bestSettlement = Hideouts.OrderByQ(s => s.GatePosition.ToVec2().Distance(mobileParty.Position.ToVec2())).FirstOrDefault();
+                    bestSettlement = Hideouts
+                        .WhereQ(s => s.StringId.StartsWith("hideout_seaside") == mergedClanIsNaval)
+                        .OrderByQ(s => s.GatePosition.ToVec2().Distance(mobileParty.Position.ToVec2()))
+                        .FirstOrDefault()
+                        ?? Hideouts.OrderByQ(s => s.GatePosition.ToVec2().Distance(mobileParty.Position.ToVec2())).FirstOrDefault();
                     if (bestSettlement is null)
                     {
                         Logger.LogWarning($"TryMergeParties: No hideout found, cancelling merge for {mobileParty.StringId} + {mergeTarget.StringId}");
                         return false;
                     }
                 }
-                // Prefer a naval clan if either source party has one, so merged BMs
-                // formed from sea raiders / pirates retain naval navigation capability
+
                 var sourceClanWithShips = (mobileParty.ActualClan?.HasNavalNavigationCapability == true ? mobileParty.ActualClan : null)
                     ?? (mergeTarget.ActualClan?.HasNavalNavigationCapability == true ? mergeTarget.ActualClan : null);
                 var mergedClan = sourceClanWithShips
@@ -352,7 +376,6 @@ namespace BanditMilitias
                     ?? bestSettlement.OwnerClan;
 
                 Logger.LogDebug($"TryMergeParties: bestSettlement={bestSettlement?.Name.ToString() ?? "NULL"}");
-
                 Logger.LogDebug($"TryMergeParties: CreateParty");
                 var bm = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(bestSettlement, leaderHero, mergedClan));
                 Logger.LogDebug($"TryMergeParties: CreateParty done, bm={bm?.StringId ?? "NULL"}, bm.IsActive={bm?.IsActive}");
@@ -365,10 +388,6 @@ namespace BanditMilitias
                     InitMilitia(bm, rosters, mobileParty.Position);
                     Logger.LogDebug($"TryMergeParties: InitMilitia done, bm.LeaderHero={bm.LeaderHero?.Name.ToString() ?? "NULL"}, bm.IsActive={bm.IsActive}");
 
-                    // If the merged BM is at sea and has ships, correct DesiredAiNavigationType —
-                    // InitializeMobilePartyAtPosition fires SetShortTermBehavior before ships exist,
-                    // so a sea-positioned party with no ships yet gets NavigationType.None and
-                    // becomes stuck. Explicitly set it to Naval now that ships are assigned.
                     if (bm.IsCurrentlyAtSea && bm.HasNavalNavigationCapability)
                         bm.DesiredAiNavigationType = MobileParty.NavigationType.Naval;
                     else if (!bm.IsCurrentlyAtSea)
@@ -395,10 +414,12 @@ namespace BanditMilitias
                     bm.GetBM().Avoidance = calculatedAvoidance;
 
                     if (Globals.Settings.TestingMode)
-                    {
-                        var party = Hero.MainHero.PartyBelongedTo ?? Hero.MainHero.PartyBelongedToAsPrisoner.MobileParty;
-                        bm.Position = party.Position;
-                    }
+                        MilitiaBehavior.TeleportMilitiasNearPlayer(bm);
+
+                    foreach (var item in mobileParty.ItemRoster.Where(i => !i.IsEmpty && i.EquipmentElement.Item?.IsFood == true))
+                        bm.ItemRoster.AddToCounts(item.EquipmentElement, item.Amount);
+                    foreach (var item in mergeTarget.ItemRoster.Where(i => !i.IsEmpty && i.EquipmentElement.Item?.IsFood == true))
+                        bm.ItemRoster.AddToCounts(item.EquipmentElement, item.Amount);
 
                     bm.Party.SetVisualAsDirty();
                     Logger.LogDebug($"TryMergeParties: SUCCESS - {bm.Name}({bm.StringId}) merged from {mobileParty.Name}({mobileParty.StringId}) and {mergeTarget.Name}({mergeTarget.StringId})");
@@ -956,28 +977,17 @@ namespace BanditMilitias
                 return null;
             }
 
-            bool isReused = false;
-            Hero hero = Hero.DeadOrDisabledHeroes
-                .FirstOrDefault(h => h != null && h.IsBM() && !Heroes.Contains(h));
-
-            if (hero != null)
-            {
-                isReused = true;
-            }
-            else
-            {
-                hero = CustomizedCreateHeroAtOccupation(settlement);
-            }
+            var hero = CustomizedCreateHeroAtOccupation(settlement);
 
             if (hero == null)
             {
-                Logger.LogError("Failed to create or reuse hero");
+                Logger.LogError("Failed to create hero");
                 return null;
             }
 
             HasMet(hero) = false;
             hero.BornSettlement = settlement;
-            hero.Clan = settlement?.OwnerClan;
+            hero.Clan = settlement.OwnerClan;
 
             if (hero.Clan == null)
             {
@@ -985,24 +995,10 @@ namespace BanditMilitias
                 return null;
             }
 
-            hero.SupporterOf = settlement?.OwnerClan;
+            hero.SupporterOf = settlement.OwnerClan;
 
-            string oldName = hero.Name?.ToString();
             NameGenerator.Current.GenerateHeroNameAndHeroFullName(hero, out TextObject firstName, out TextObject fullName, false);
             hero.SetName(fullName, firstName);
-
-            // ResetEquipments() crashes in current game version (get_FirstStealthEquipment returns null).
-            // For reused heroes, manually clear equipment slots before CreateHero reassigns them.
-            if (isReused)
-            {
-                for (int i = 0; i < 12; i++)
-                {
-                    hero.BattleEquipment[i] = EquipmentElement.Invalid;
-                    hero.CivilianEquipment[i] = EquipmentElement.Invalid;
-                }
-            }
-
-            Logger.LogTrace($"{oldName} is reused as {hero}");
 
             HeroDeveloperField(hero) = HeroDeveloperConstructor.Invoke([hero]) as HeroDeveloper;
             hero.HeroDeveloper.InitializeHeroDeveloper();
@@ -1141,7 +1137,6 @@ namespace BanditMilitias
                 int number, numberToUpgrade;
                 if (Globals.Settings.LooterUpgradePercent > 0)
                 {
-                    // upgrade any looters first, then go back over and iterate further upgrades
                     var allLooters = mobileParty.MemberRoster.GetTroopRoster().WhereQ(e => e.Character == Looters.BasicTroop).ToList();
                     if (allLooters.Any())
                     {
@@ -1183,16 +1178,10 @@ namespace BanditMilitias
                     minNumberToUpgrade = Math.Max(1, minNumberToUpgrade);
                     numberToUpgrade = Convert.ToInt32((number + 1) / 2f);
                     numberToUpgrade = numberToUpgrade > minNumberToUpgrade ? Convert.ToInt32(MBRandom.RandomInt(minNumberToUpgrade, numberToUpgrade)) : minNumberToUpgrade;
-                    //Log.Debug?.Log($"^^^ {mobileParty.LeaderHero.Name} is training up to {numberToUpgrade} of {number} \"{troopToTrain.Character.Name}\".");
                     var xpGain = numberToUpgrade * DifficultyXpMap.ElementAt(Globals.Settings.XpGift.SelectedIndex).Value;
                     mobileParty.MemberRoster.AddXpToTroop(troopToTrain.Character, xpGain);
                     UpgraderCampaignBehavior ??= Campaign.Current.GetCampaignBehavior<PartyUpgraderCampaignBehavior>();
                     UpgraderCampaignBehavior.UpgradeReadyTroops(mobileParty.Party);
-                    if (Globals.Settings.TestingMode)
-                    {
-                        var party = Hero.MainHero.PartyBelongedTo ?? Hero.MainHero.PartyBelongedToAsPrisoner.MobileParty;
-                        mobileParty.Position = party.Position;
-                    }
                 }
             }
             catch (Exception ex)
@@ -1227,13 +1216,20 @@ namespace BanditMilitias
                 if (militia.ActualClan?.HasNavalNavigationCapability == true
                     && militia.Party.Ships.Count == 0)
                 {
-                    foreach (var stack in militia.ActualClan.DefaultPartyTemplate.ShipHulls)
+                    var hulls = militia.ActualClan.DefaultPartyTemplate.ShipHulls;
+                    if (hulls != null && hulls.Count > 0)
                     {
-                        int count = MBRandom.RandomInt(stack.MinValue, stack.MaxValue + 1);
-                        for (int i = 0; i < count; i++)
+                        int troopCount = rosters[0].TotalManCount;
+                        int capacity = 0;
+                        int safetyLimit = 50;
+                        while (capacity < troopCount && safetyLimit-- > 0)
+                        {
+                            var stack = hulls.GetRandomElement();
                             new Ship(stack.ShipHull) { Owner = militia.Party };
+                            capacity += stack.ShipHull.TotalCrewCapacity;
+                        }
+                        Logger.LogTrace($"{militia.Name}({militia.StringId}) assigned {militia.Party.Ships.Count} ships for {troopCount} troops (capacity={capacity}).");
                     }
-                    Logger.LogTrace($"{militia.Name}({militia.StringId}) assigned {militia.Party.Ships.Count} ships.");
                 }
 
                 militia.InitializeMobilePartyAtPosition(rosters[0], rosters[1], position);
@@ -1359,8 +1355,9 @@ namespace BanditMilitias
             ClearGlobals();
             SubModule.CacheBanners();
             PopulateItems();
+            BlackFlag = MBObjectManager.Instance.GetObject<CultureObject>("ad_bandit_blackflag");
             Looters = Clan.BanditFactions.First(c => c.StringId == "looters");
-            Wights = Clan.BanditFactions.FirstOrDefaultQ(c => c.StringId == "wights"); // ROT
+            Wights = Clan.BanditFactions.FirstOrDefaultQ(c => c.StringId == "wights");
             Hideouts = Settlement.All.WhereQ(s => s.IsHideout).ToListQ();
             RaidCap = Convert.ToInt32(Settlement.FindAll(s => s.IsVillage).CountQ() / 10f);
             HeroTemplates = CharacterObject.All

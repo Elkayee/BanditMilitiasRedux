@@ -110,12 +110,10 @@ namespace BanditMilitias
 
         public override void OnGameEnd(Game game)
         {
-            // Clear ALL static state when a game session ends, not just Heroes.
-            // This prevents Banners, BanditEquipment, and other large lists from
-            // accumulating across multiple save loads within the same process.
             Globals.ClearGlobals();
-            Globals.Banners.Clear();          // Banners is readonly so ClearGlobals can't replace it
+            Globals.Banners.Clear();
             Globals.Heroes.Clear();
+            Helper.ResetUpgraderBehavior();
             Settings.OnSettingsChanged -= OnSettingsChanged;
         }
 

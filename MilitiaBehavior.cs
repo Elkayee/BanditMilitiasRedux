@@ -474,7 +474,14 @@ namespace BanditMilitias
                          party =
                              MobileParty.FindNextLocatable(ref locatableSearchData))
                     {
-                        if (party == mobileParty) continue;
+                        if (party == mobileParty)
+                            continue;
+
+                        if (mobileParty.HasNavalNavigationCapability
+                            && mobileParty.ActualClan != null
+                            && party.ActualClan != mobileParty.ActualClan)
+                            continue;
+
                         if (party.IsBandit && party.MapEvent is null &&
                             mobileParty.MemberRoster.TotalManCount > Globals.Settings.MergeableSize &&
                             mobileParty.MemberRoster.TotalManCount + party.MemberRoster.TotalManCount >= Globals.Settings.MinPartySize &&
@@ -569,12 +576,14 @@ namespace BanditMilitias
                     case AiBehavior.Hold:
                         if (mobileParty.TargetSettlement is null)
                         {
-                            // FIX: Sea parties must never be assigned SetMovePatrolAroundSettlement
-                            // targeting a land settlement — GetNavalPatrolBehavior calls
-                            // GetPathDistanceBetweenAIFaces in native code which crashes with
-                            // AccessViolationException when no valid land navmesh face exists.
-                            if (mobileParty.IsCurrentlyAtSea)
+                            var homeSettlement = mobileParty.GetBM()?.HomeSettlement;
+                            if (homeSettlement?.StringId.StartsWith("hideout_seaside") == true
+                                && mobileParty.HasNavalNavigationCapability)
+                            {
+                                mobileParty.DesiredAiNavigationType = MobileParty.NavigationType.Naval;
+                                mobileParty.SetMovePatrolAroundPoint(mobileParty.Position, MobileParty.NavigationType.Naval);
                                 break;
+                            }
 
                             var validSettlements = Settlement.All
                                 .WhereQ(s => s != null
@@ -592,14 +601,19 @@ namespace BanditMilitias
                         break;
 
                     case AiBehavior.GoToSettlement:
-                        // Sometimes they might be stuck in a hideout
                         if (mobileParty.TargetSettlement?.IsHideout == true)
                         {
-                            // strange memory access violation error when some mods are installed
                             if (!mobileParty.IsEngaging && mobileParty.Position.ToVec2().Distance(mobileParty.TargetSettlement.Position.ToVec2()) == 0f)
                             {
                                 mobileParty.SetMoveModeHold();
                             }
+                        }
+                        // Naval BMs that have reached their home settlement should patrol around it
+                        else if (mobileParty.IsCurrentlyAtSea
+                            && mobileParty.TargetSettlement == mobileParty.GetBM()?.HomeSettlement
+                            && mobileParty.Position.ToVec2().Distance(mobileParty.TargetSettlement.GatePosition.ToVec2()) < 10f)
+                        {
+                            mobileParty.SetMovePatrolAroundPoint(mobileParty.Position, MobileParty.NavigationType.Naval);
                         }
                         break;
                     case AiBehavior.PatrolAroundPoint:
@@ -941,7 +955,6 @@ namespace BanditMilitias
                         Logger.LogWarning($"Could not force hostility for {bm.StringId}: {ex.Message}");
                     }
                     */
-
                     try
                     {
                         InitMilitia(banditMilitia, new[] { roster, TroopRoster.CreateDummyTroopRoster() }, settlement.GatePosition);
@@ -953,8 +966,18 @@ namespace BanditMilitias
                         continue;
                     }
 
+                    if (settlement.StringId.StartsWith("hideout_seaside") && banditMilitia.HasNavalNavigationCapability)
+                    {
+                        banditMilitia.DesiredAiNavigationType = MobileParty.NavigationType.Naval;
+                        banditMilitia.SetMovePatrolAroundPoint(banditMilitia.Position, MobileParty.NavigationType.Naval);
+                    }
+                    else
+                    {
+                        banditMilitia.DesiredAiNavigationType = MobileParty.NavigationType.Default;
+                    }
+
                     DoPowerCalculations();
-                    
+
                     Logger.LogDebug($"Spawned {banditMilitia.Name}({banditMilitia.StringId}) at {banditMilitia.Position.ToVec2()}.");
 
                     if (Globals.Settings?.TestingMode == true)
@@ -969,26 +992,37 @@ namespace BanditMilitias
             }
         }
 
-        private static void TeleportMilitiasNearPlayer(MobileParty banditMilitia)
+        internal static void TeleportMilitiasNearPlayer(MobileParty banditMilitia)
         {
             try
             {
+                Logger.LogDebug($"Testing mode is activated.");
+
                 MobileParty targetParty = null;
 
-                // Try to get main hero's party (normal case)
                 if (Hero.MainHero?.PartyBelongedTo is not null)
                     targetParty = Hero.MainHero.PartyBelongedTo;
 
-                // If hero is prisoner, get that party instead
                 if (targetParty is null && Hero.MainHero?.PartyBelongedToAsPrisoner?.MobileParty is not null)
                     targetParty = Hero.MainHero.PartyBelongedToAsPrisoner.MobileParty;
 
-                // Only teleport if we found a valid target
-                if (targetParty?.Position != null)
+                if (targetParty?.Position == null)
+                    return;
+
+                bool playerIsAtSea = targetParty.IsCurrentlyAtSea;
+                string homeSettlementId = banditMilitia.GetBM()?.HomeSettlement?.StringId ?? "NULL";
+                bool militiaIsSeaType = homeSettlementId.StartsWith("hideout_seaside");
+
+                Logger.LogDebug($"TeleportCheck: {banditMilitia.Name} | homeSettlement={homeSettlementId} | playerIsAtSea={playerIsAtSea} | militiaIsSeaType={militiaIsSeaType}");
+
+                if (playerIsAtSea != militiaIsSeaType)
                 {
-                    banditMilitia.Position = targetParty.Position;
-                    Logger.LogTrace($"Teleported {banditMilitia.Name} to player at {banditMilitia.Position.ToVec2()}");
+                    Logger.LogDebug($"Skipping teleport of {banditMilitia.Name} — terrain mismatch");
+                    return;
                 }
+
+                banditMilitia.Position = targetParty.Position;
+                Logger.LogDebug($"Teleported {banditMilitia.Name} to player at {banditMilitia.Position.ToVec2()}");
             }
             catch (Exception ex)
             {
