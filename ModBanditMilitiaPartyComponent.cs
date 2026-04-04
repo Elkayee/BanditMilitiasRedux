@@ -60,8 +60,8 @@ namespace BanditMilitias
                 if (leader is not null)
                 {
                     Logger.LogDebug($"{newLeader.Name} is taking over {MobileParty.Name}({MobileParty.StringId}) from {leader.Name}[{leader.HeroState}].");
-                    newLeader.Clan = MobileParty.ActualClan;
                 }
+                newLeader.Clan = MobileParty.ActualClan;
                 leader = newLeader;
                 ClearCachedName();
             }

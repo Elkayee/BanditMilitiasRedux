@@ -124,7 +124,8 @@ namespace BanditMilitias
             var inventory1 = new ItemRoster();
             var inventory2 = new ItemRoster();
             var heroes = mobileParty.Party.MemberRoster
-                .RemoveIf(t => t.Character.IsHero)
+                .GetTroopRoster()
+                .WhereQ(t => t.Character.IsHero)
                 .Select(t => t.Character.HeroObject)
                 .OrderByQ(h => -h.Power)
                 .ToListQ();
@@ -204,15 +205,24 @@ namespace BanditMilitias
                     return;
                 }
 
+                if (original.HomeSettlement == null)
+                {
+                    Logger.LogError("Original militia has no HomeSettlement");
+                    Trash(original);
+                    return;
+                }
+
+                // Heroes are only removed from the roster here, after all guards have passed
+                original.MemberRoster.RemoveIf(t => t.Character.IsHero);
+
                 for (int i = heroes.Count - 1; i >= 0; i--)
                 {
                     TroopRoster targetParty = i % 2 == 0 ? party1 : party2;
                     targetParty.AddToCounts(heroes[i].CharacterObject, 1, true);
                 }
-                
+
                 while (party1.TotalManCount < Globals.Settings.MinPartySize && party1.Count > 0)
                 {
-                    // using 1, not 0 because 0 is the BM hero
                     var troop = party1.GetCharacterAtIndex(MBRandom.RandomInt(0, party1.Count));
                     if (troop == null) break;
                     if (!IsRegistered(troop))
@@ -227,13 +237,6 @@ namespace BanditMilitias
                     if (!IsRegistered(troop))
                         Meow();
                     party2.AddToCounts(troop, 1);
-                }
-
-                if (original.HomeSettlement == null)
-                {
-                    Logger.LogError("Original militia has no HomeSettlement");
-                    Trash(original);
-                    return;
                 }
 
                 var bm1 = MobileParty.CreateParty("Bandit_Militia", new ModBanditMilitiaPartyComponent(original.HomeSettlement, heroes[0], original.ActualClan));
@@ -330,8 +333,14 @@ namespace BanditMilitias
                 Settlement mergeTargetHomeSettlement = mergeTarget.HomeSettlement?.IsHideout ?? false ? mergeTarget.HomeSettlement : null;
                 Settlement bestSettlement = leaderHero?.HomeSettlement ?? (mobileParty.Party.EstimatedStrength > mergeTarget.Party.EstimatedStrength ? mobilePartyHomeSettlement ?? mergeTargetHomeSettlement : mergeTargetHomeSettlement ?? mobilePartyHomeSettlement);
                 if (bestSettlement is null)
-                    bestSettlement = Hideouts.OrderByQ(s => s.GatePosition.ToVec2().Distance(mobileParty.Position.ToVec2())).First();
-
+                {
+                    bestSettlement = Hideouts.OrderByQ(s => s.GatePosition.ToVec2().Distance(mobileParty.Position.ToVec2())).FirstOrDefault();
+                    if (bestSettlement is null)
+                    {
+                        Logger.LogWarning($"TryMergeParties: No hideout found, cancelling merge for {mobileParty.StringId} + {mergeTarget.StringId}");
+                        return false;
+                    }
+                }
                 // Prefer a naval clan if either source party has one, so merged BMs
                 // formed from sea raiders / pirates retain naval navigation capability
                 var sourceClanWithShips = (mobileParty.ActualClan?.HasNavalNavigationCapability == true ? mobileParty.ActualClan : null)
@@ -450,13 +459,11 @@ namespace BanditMilitias
             try
             {
                 mobileParty.Ai?.DisableAi();
-                mobileParty.IsActive = false;
                 DestroyPartyAction.Apply(null, mobileParty);
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, $"Error trashing {mobileParty.StringId}");
-                try { mobileParty.IsActive = false; } catch { }
             }
         }
 
@@ -579,8 +586,8 @@ namespace BanditMilitias
                         {
                             if (mobileParty?.IsActive == true)
                             {
-                                mobileParty.IsActive = false;
-                                Logger.LogTrace($"Disabled BM party {mobileParty.StringId} after MapEvent finalization");
+                                Trash(mobileParty);
+                                Logger.LogTrace($"Trashed BM party {mobileParty.StringId} after MapEvent finalization");
                             }
                         }
                         Logger.LogTrace($"Flushed MapEvent with {bmPartiesToClean.Count} BM parties");
@@ -1090,13 +1097,20 @@ namespace BanditMilitias
             mobileParty.MemberRoster.AddToCounts(leaderCharacterObject, 1, true);
             Logger.LogDebug($"ConfigureMilitia: roster updated");
 
-            if (MBRandom.RandomInt(0, 2) == 0)
+            if (MBRandom.RandomInt(0, 2) == 0 && Mounts.Count > 0)
             {
                 var mount = Mounts.GetRandomElement();
-                mobileParty.GetBM().Leader.BattleEquipment[10] = new EquipmentElement(mount);
-                mobileParty.GetBM().Leader.BattleEquipment[11] = mount.HorseComponent.Monster.MonsterUsage == "camel"
-                    ? new EquipmentElement(CamelSaddles.GetRandomElement())
-                    : new EquipmentElement(NonCamelSaddles.GetRandomElement());
+                if (mount?.HorseComponent?.Monster is null) return;
+
+                var saddles = mount.HorseComponent.Monster.MonsterUsage == "camel" ? CamelSaddles : NonCamelSaddles;
+                if (saddles.Count > 0)
+                {
+                    var leader = mobileParty.GetBM()?.Leader;
+                    if (leader is null) return;
+
+                    leader.BattleEquipment[10] = new EquipmentElement(mount);
+                    leader.BattleEquipment[11] = new EquipmentElement(saddles.GetRandomElement());
+                }
             }
             Logger.LogDebug($"ConfigureMilitia: DONE");
         }
@@ -1264,12 +1278,15 @@ namespace BanditMilitias
 
         internal static void DecreaseAvoidance(List<Hero> loserHeroes, MapEventParty mep)
         {
+            var bm = mep.Party.MobileParty?.GetBM();
+            if (bm?.Avoidance is null) return;
+
             foreach (var loserHero in loserHeroes)
             {
-                if (mep.Party.MobileParty.GetBM().Avoidance.TryGetValue(loserHero, out _))
-                    mep.Party.MobileParty.GetBM().Avoidance[loserHero] -= MilitiaBehavior.Increment;
+                if (bm.Avoidance.TryGetValue(loserHero, out _))
+                    bm.Avoidance[loserHero] -= MilitiaBehavior.Increment;
                 else
-                    mep.Party.MobileParty.GetBM().Avoidance.Add(loserHero, MBRandom.RandomInt(15, 35));
+                    bm.Avoidance.Add(loserHero, MBRandom.RandomInt(15, 35));
             }
         }
 

@@ -170,7 +170,7 @@ namespace BanditMilitias.Patches
         {
             public static bool Prefix(Hero hero)
             {
-                if (hero.Clan.Leader is null && hero.IsBM())
+                if (hero.IsBM() && hero.Clan?.Leader is null)
                 {
                     Clan captorClanOfPrisoner = !hero.PartyBelongedToAsPrisoner.IsMobile ? hero.PartyBelongedToAsPrisoner.Settlement.OwnerClan : !hero.PartyBelongedToAsPrisoner.MobileParty.IsMilitia && !hero.PartyBelongedToAsPrisoner.MobileParty.IsGarrison && !hero.PartyBelongedToAsPrisoner.MobileParty.IsCaravan && !hero.PartyBelongedToAsPrisoner.MobileParty.IsVillager || hero.PartyBelongedToAsPrisoner.Owner == null ? hero.PartyBelongedToAsPrisoner.MobileParty.ActualClan : !hero.PartyBelongedToAsPrisoner.Owner.IsNotable ? hero.PartyBelongedToAsPrisoner.Owner.Clan : hero.PartyBelongedToAsPrisoner.Owner.CurrentSettlement.OwnerClan;
                     if (captorClanOfPrisoner == null)

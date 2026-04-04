@@ -46,7 +46,7 @@ namespace BanditMilitias
                     if (attackers.Count == 0)
                         return;
 
-                    PartyBase party = attackers.First().Party;
+                    PartyBase party = attackers.FirstOrDefaultQ(a => a.Party.IsMobile && a.Party.MobileParty.IsBM())?.Party;
                     if (party?.MobileParty is null)
                         return;
 
@@ -70,7 +70,10 @@ namespace BanditMilitias
                     if (m?.AttackerSide?.Parties is null || !m.AttackerSide.Parties.AnyQ(mep => mep.Party.IsMobile && mep.Party.MobileParty.IsBM()))
                         return;
 
-                    PartyBase party = m.AttackerSide.Parties.First().Party;
+                    PartyBase party = m.AttackerSide.Parties.FirstOrDefaultQ(mep => mep.Party.IsMobile && mep.Party.MobileParty.IsBM())?.Party;
+                    if (party is null)
+                        return;
+
                     Logger.LogDebug($"{party.Name}({party.MobileParty.StringId} has done raiding {m.MapEventSettlement?.Name}.");
 
                     if (party?.MobileParty?.Ai is not null)
@@ -277,8 +280,6 @@ namespace BanditMilitias
                              bm?.MobileParty != null && bm.MobileParty.Position.ToVec2().Distance(mobileParty.Position.ToVec2()) < EffectRadius))
                 {
                     if (BM?.Avoidance is null)
-                        continue;
-                    if (destroyer.LeaderHero is null)
                         continue;
 
                     if (BM.Avoidance.TryGetValue(destroyer.LeaderHero, out _))
@@ -548,7 +549,7 @@ namespace BanditMilitias
                 try { Trash(mobileParty); } catch { /* swallow */ }
                 if (mergeTarget is not null)
                 {
-                    Trash(mergeTarget);
+                    try { Trash(mergeTarget); } catch { /* swallow */ }
                 }
             }
         }

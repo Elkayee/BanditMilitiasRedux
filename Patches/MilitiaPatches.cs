@@ -286,8 +286,12 @@ namespace BanditMilitias.Patches
                 {
                     if (element.Character.HeroObject.MapFaction?.IsAtWarWith(Hero.MainHero.MapFaction) == true)
                     {
-                        element.Character.HeroObject.PartyBelongedToAsPrisoner.PrisonRoster.RemoveTroop(element.Character);
-                        receivingLootShare.AddToCounts(element.Character, 1, true, element.WoundedNumber, element.Xp, false);
+                        var prisonParty = element.Character.HeroObject.PartyBelongedToAsPrisoner;
+                        if (prisonParty is not null)
+                        {
+                            prisonParty.PrisonRoster.RemoveTroop(element.Character);
+                            receivingLootShare.AddToCounts(element.Character, 1, true, element.WoundedNumber, element.Xp, false);
+                        }
                     }
                     freedHeroes.Remove(element);
                 }
@@ -331,8 +335,8 @@ namespace BanditMilitias.Patches
                     return true;
 
                 MobileParty attacker = getMobileParty(__instance);
-                if (!attacker.IsBM())
-                    return true;
+                var bm = attacker.GetBM();
+                if (bm is null) return true;
 
                 PartyBase targetPartyBase = interactablePoint as PartyBase;
                 MobileParty targetParty = targetPartyBase?.MobileParty;
@@ -344,7 +348,7 @@ namespace BanditMilitias.Patches
                     return false;
 
                 if (targetParty.LeaderHero is not null
-                    && attacker.GetBM().Avoidance.TryGetValue(targetParty.LeaderHero, out var heroAvoidance)
+                    && bm.Avoidance.TryGetValue(targetParty.LeaderHero, out var heroAvoidance)
                     && MBRandom.RandomFloat * 100f < heroAvoidance)
                     return false;
 
