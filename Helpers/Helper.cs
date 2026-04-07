@@ -52,6 +52,11 @@ namespace BanditMilitias
                 _bornSettlement(BM.Leader) = BM.HomeSettlement;
         }
 
+        /// <summary>
+        /// Returns true if the settlement is a land hideout (not a seaside/naval hideout).
+        /// </summary>
+        internal static bool IsLandHideout(Settlement s) => !s.StringId.StartsWith("hideout_seaside");
+
         internal static bool TrySplitParty(MobileParty mobileParty)
             => MilitiaPartyFactory.TrySplitParty(mobileParty);
 
@@ -411,7 +416,7 @@ namespace BanditMilitias
                     InformationManager.DisplayMessage(new("Bandit Militias found bad item(s) in player inventory:"));
                 }
 
-                InformationManager.DisplayMessage(new($"removing {item.EquipmentElement.Item.StringId}"));
+                InformationManager.DisplayMessage(new($"removing {item.EquipmentElement.Item?.StringId}"));
                 MobileParty.MainParty.ItemRoster.Remove(item);
             }
 

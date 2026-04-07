@@ -92,10 +92,6 @@ namespace BanditMilitias.Patches
             {
                 if (__instance.IsMobile && __instance.MobileParty.IsBM())
                 {
-                    // Always provide the BM banner — regardless of the RandomBanners
-                    // setting. Without this, ship.Owner.Banner returns null for BM
-                    // parties that captured naval vessels, crashing the Naval DLC
-                    // port screen in ShipVisualHelper.SetBanner.
                     __result = __instance.MobileParty.GetBM().Banner;
                 }
             }
@@ -462,20 +458,11 @@ namespace BanditMilitias.Patches
                 if (!mobileParty.IsBM())
                     return;
 
-                // Use HasNavalNavigationCapability, not IsCurrentlyAtSea — a newly
-                // created naval BM sitting on the hideout gate is not yet "at sea"
-                // but must never be given land AI orders.
+                // Naval parties from other mods/DLC — skip entirely.
                 if (mobileParty.HasNavalNavigationCapability)
-                {
-                    if (mobileParty.TargetPosition == CampaignVec2.Zero || mobileParty.DefaultBehavior == AiBehavior.Hold)
-                    {
-                        var homePos = mobileParty.GetBM()?.HomeSettlement?.GatePosition ?? mobileParty.Position;
-                        mobileParty.SetMovePatrolAroundPoint(homePos, MobileParty.NavigationType.Naval);
-                    }
                     return;
-                }
 
-                // BUG 1 FIX — land BMs: when TargetSettlement is null (cleared by
+                // Land BMs: when TargetSettlement is null (cleared by
                 // EnterSettlementAction's Hold) delegate to BMThink so it picks a
                 // fresh non-hideout patrol target.  Never call SetMoveGoToSettlement
                 // with HomeSettlement here — HomeSettlement IS the hideout and that

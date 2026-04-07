@@ -10,9 +10,18 @@ namespace BanditMilitias
     {
         internal static ILogger Get<T>()
         {
-            IServiceProvider serviceProvider = SubModule.Instance?.GetServiceProvider() ?? SubModule.Instance?.GetTempServiceProvider();
-
-            return serviceProvider.GetRequiredService<ILogger<T>>() ?? NullLogger<T>.Instance;
+            try
+            {
+                var serviceProvider = SubModule.Instance?.GetServiceProvider()
+                    ?? SubModule.Instance?.GetTempServiceProvider();
+                if (serviceProvider is null)
+                    return NullLogger<T>.Instance;
+                return serviceProvider.GetService<ILogger<T>>() ?? NullLogger<T>.Instance;
+            }
+            catch
+            {
+                return NullLogger<T>.Instance;
+            }
         }
     }
 }

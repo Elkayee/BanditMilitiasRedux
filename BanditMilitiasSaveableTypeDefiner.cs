@@ -23,7 +23,6 @@ namespace BanditMilitias
         {
             base.DefineContainerDefinitions();
             ConstructContainerDefinition(typeof(Dictionary<Hero, float>));
-            ConstructContainerDefinition(typeof(Dictionary<string, Equipment>));
         }
     }
 }

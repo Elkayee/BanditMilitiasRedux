@@ -42,8 +42,6 @@ namespace BanditMilitias.Patches
                         Logger.LogDebug($"{mobileParty.Name}({mobileParty.StringId}) has lost a battle and its leader, but was not dispersed.");
                         RemoveMilitiaLeader(mobileParty);
                     }
-
-                    //RemoveUndersizedTracker(mobileParty);
                 }
 
                 DoPowerCalculations();
@@ -59,12 +57,9 @@ namespace BanditMilitias.Patches
             {
                 if (!__instance.HasWinner)
                     return;
+
                 var loserBMs = __instance.PartiesOnSide(__instance.DefeatedSide)
                     .WhereQ(p => p.Party?.MobileParty?.PartyComponent is ModBanditMilitiaPartyComponent);
-                foreach (var party in loserBMs)
-                {
-                    //RemoveUndersizedTracker(party.Party.MobileParty);
-                }
 
                 DoPowerCalculations();
             }

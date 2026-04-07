@@ -25,7 +25,6 @@ namespace BanditMilitias
         [SaveableField(4)] public Dictionary<Hero, float> Avoidance = new();
         [SaveableField(5)] private Hero leader;
         [SaveableField(6)] private Settlement homeSettlement;
-        [SaveableField(7)] public CampaignVec2 NavalPatrolPosition;
         [CachedData] private TextObject cachedName;
 
         public override Settlement HomeSettlement => homeSettlement;

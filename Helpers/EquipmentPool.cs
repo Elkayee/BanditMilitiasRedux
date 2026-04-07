@@ -147,7 +147,7 @@ namespace BanditMilitias
 
             var runningCivilizedMod = AppDomain.CurrentDomain.GetAssemblies()
                 .AnyQ(a => a.FullName.Contains("Civilized"));
-            if (!runningCivilizedMod)
+            if (runningCivilizedMod)
                 weapons.RemoveAll(i => !i.IsCivilian);
 
             weapons.RemoveAll(item => VerbotenItemStringIds.Contains(item.StringId));
@@ -276,15 +276,13 @@ namespace BanditMilitias
             var gear       = new Equipment();
             var haveShield = false;
             var haveBow    = false;
+            var retries = 0;
 
             try
             {
                 for (var slot = 0; slot < 4; slot++)
                 {
-                    var retries = 0;
-
                     EquipmentElement randomElement = default;
-
                     switch (slot)
                     {
                         case 0:

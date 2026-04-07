@@ -67,6 +67,11 @@ namespace BanditMilitias
         protected override void OnBeforeInitialModuleScreenSetAsRoot()
         {
             Globals.Settings = Settings.Instance;
+            if (Globals.Settings is null)
+            {
+                Logger.LogError("MCM Settings.Instance is null — mod cannot initialize settings.");
+                return;
+            }
             Globals.Settings!.XpGift = new(Globals.DifficultyXpMap.Keys.SelectQ(k => k.ToString()), 1);
             Globals.Settings!.GoldReward = new(Globals.GoldMap.Keys.SelectQ(k => k.ToString()), 1);
             Logger.LogInformation($"{Globals.Settings!.DisplayName} starting up...");

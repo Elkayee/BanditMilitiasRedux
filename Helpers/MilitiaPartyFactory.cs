@@ -58,20 +58,20 @@ namespace BanditMilitias
         // ── Quest / special-party blocklist ───────────────────────────────────────
 
         private static readonly HashSet<string> verbotenParties = new()
-        {
-            "ebdi_deserters_party",
-            "caravan_ambush_quest",
-            "arzagos_banner_piece_quest_raider_party",
-            "istiana_banner_piece_quest_raider_party",
-            "rescue_family_quest_raider_party",
-            "destroy_raiders_conspiracy_quest",
-            "radagos_raider_party",
-            "locate_and_rescue_traveller_quest_raider_party",
-            "company_of_trouble",
-            "villagers_of_landlord_needs_access_to_village_common_quest",
-            //Calradia Expanded Kingdoms in 3.0.2
-            "manhunter"
-        };
+            {
+                "ebdi_deserters_party",
+                "caravan_ambush_quest",
+                "arzagos_banner_piece_quest_raider_party",
+                "istiana_banner_piece_quest_raider_party",
+                "rescue_family_quest_raider_party",
+                "destroy_raiders_conspiracy_quest",
+                "radagos_raider_party",
+                "locate_and_rescue_traveller_quest_raider_party",
+                "company_of_trouble",
+                "villagers_of_landlord_needs_access_to_village_common_quest",
+                //Calradia Expanded Kingdoms in 3.0.2
+                "manhunter"
+            };
 
         // ── Availability checks ───────────────────────────────────────────────────
 
@@ -129,19 +129,17 @@ namespace BanditMilitias
                     : mergeTarget.LeaderHero;
                 Logger.LogDebug($"TryMergeParties: leaderHero={leaderHero?.Name.ToString() ?? "NULL"}");
 
-                bool mergedClanIsNaval = mobileParty.ActualClan?.HasNavalNavigationCapability == true
-                    || mergeTarget.ActualClan?.HasNavalNavigationCapability == true;
-
-                // Respect the SpawnLandMilitias / SpawnNavalMilitias settings
-                if (mergedClanIsNaval && !Globals.Settings.SpawnNavalMilitias)
+                // Naval parties from other mods/DLC — reject the merge entirely.
+                if (mobileParty.ActualClan?.HasNavalNavigationCapability == true
+                    || mergeTarget.ActualClan?.HasNavalNavigationCapability == true)
                 {
-                    Logger.LogDebug($"TryMergeParties: skipping naval merge for {mobileParty.StringId} + {mergeTarget.StringId} — naval militias disabled by settings.");
+                    Logger.LogDebug($"TryMergeParties: skipping naval merge for {mobileParty.StringId} + {mergeTarget.StringId} — naval militias not supported.");
                     mobileParty.SetMoveModeHold();
                     mergeTarget.SetMoveModeHold();
                     return false;
                 }
 
-                if (!mergedClanIsNaval && !Globals.Settings.SpawnLandMilitias)
+                if (!Globals.Settings.SpawnLandMilitias)
                 {
                     Logger.LogDebug($"TryMergeParties: skipping land merge for {mobileParty.StringId} + {mergeTarget.StringId} — land militias disabled by settings.");
                     mobileParty.SetMoveModeHold();
@@ -154,12 +152,12 @@ namespace BanditMilitias
                 Settlement leaderHomeSettlement = leaderHero?.HomeSettlement?.IsHideout ?? false ? leaderHero.HomeSettlement : null;
 
                 Settlement bestSettlement = new[] { leaderHomeSettlement, mobilePartyHomeSettlement, mergeTargetHomeSettlement }
-                    .FirstOrDefault(s => s != null && s.StringId.StartsWith("hideout_seaside") == mergedClanIsNaval);
+                    .FirstOrDefault(s => s != null && Helper.IsLandHideout(s));
 
                 if (bestSettlement is null)
                 {
                     bestSettlement = Hideouts
-                        .WhereQ(s => s.StringId.StartsWith("hideout_seaside") == mergedClanIsNaval)
+                        .WhereQ(s => Helper.IsLandHideout(s))
                         .OrderByQ(s => s.GatePosition.ToVec2().Distance(mobileParty.Position.ToVec2()))
                         .FirstOrDefault()
                         ?? Hideouts.OrderByQ(s => s.GatePosition.ToVec2().Distance(mobileParty.Position.ToVec2())).FirstOrDefault();
@@ -170,10 +168,7 @@ namespace BanditMilitias
                     }
                 }
 
-                var sourceClanWithShips = (mobileParty.ActualClan?.HasNavalNavigationCapability == true ? mobileParty.ActualClan : null)
-                    ?? (mergeTarget.ActualClan?.HasNavalNavigationCapability == true ? mergeTarget.ActualClan : null);
-                var mergedClan = sourceClanWithShips
-                    ?? mobileParty.ActualClan
+                var mergedClan = mobileParty.ActualClan
                     ?? mergeTarget.ActualClan
                     ?? Clan.BanditFactions.FirstOrDefault(c => c.Culture == bestSettlement.Culture)
                     ?? bestSettlement.OwnerClan;
@@ -190,8 +185,7 @@ namespace BanditMilitias
                     InitMilitia(bm, rosters, mobileParty.Position);
                     Logger.LogDebug($"TryMergeParties: InitMilitia done, bm.LeaderHero={bm.LeaderHero?.Name.ToString() ?? "NULL"}, bm.IsActive={bm.IsActive}");
 
-                    if (!bm.HasNavalNavigationCapability)
-                        bm.DesiredAiNavigationType = MobileParty.NavigationType.Default;
+                    bm.DesiredAiNavigationType = MobileParty.NavigationType.Default;
 
                     var calculatedAvoidance = new Dictionary<Hero, float>();
                     void CalcAverageAvoidance(ModBanditMilitiaPartyComponent BM)
@@ -280,12 +274,11 @@ namespace BanditMilitias
                 return false;
             }
 
-            // Respect the SpawnLandMilitias / SpawnNavalMilitias settings — no split
-            // means the party simply continues as-is rather than being destroyed.
-            bool isNavalParty = mobileParty.ActualClan?.HasNavalNavigationCapability == true;
-            if (isNavalParty && !Globals.Settings.SpawnNavalMilitias)
+            // Naval parties from other mods/DLC — do not split.
+            if (mobileParty.ActualClan?.HasNavalNavigationCapability == true)
                 return false;
-            if (!isNavalParty && !Globals.Settings.SpawnLandMilitias)
+
+            if (!Globals.Settings.SpawnLandMilitias)
                 return false;
 
             int roll = MBRandom.RandomInt(0, 101);
@@ -427,15 +420,14 @@ namespace BanditMilitias
                     party2.AddToCounts(troop, 1);
                 }
 
-                var originalIsNaval = original.ActualClan?.HasNavalNavigationCapability == true;
                 var splitHome = original.HomeSettlement;
 
-                // If the original's HomeSettlement doesn't match the clan's navigation
-                // type (can happen with old saves or bad merges), find the correct one.
-                if (splitHome == null || splitHome.StringId.StartsWith("hideout_seaside") != originalIsNaval)
+                // If the original's HomeSettlement is a seaside hideout (can happen
+                // with old saves or bad merges), find the nearest land hideout.
+                if (splitHome == null || !Helper.IsLandHideout(splitHome))
                 {
                     splitHome = Hideouts
-                        .WhereQ(s => s.StringId.StartsWith("hideout_seaside") == originalIsNaval)
+                        .WhereQ(s => Helper.IsLandHideout(s))
                         .OrderByQ(s => s.GatePosition.ToVec2().Distance(original.Position.ToVec2()))
                         .FirstOrDefault()
                         ?? original.HomeSettlement;
@@ -471,44 +463,9 @@ namespace BanditMilitias
         {
             try
             {
-                if (militia.ActualClan?.HasNavalNavigationCapability == true
-                    && militia.Party.Ships.Count == 0)
-                {
-                    var hulls = militia.ActualClan.DefaultPartyTemplate.ShipHulls;
-                    if (hulls != null && hulls.Count > 0)
-                    {
-                        int troopCount = rosters[0].TotalManCount;
-                        int capacity = 0;
-                        int safetyLimit = 50;
-                        while (capacity < troopCount && safetyLimit-- > 0)
-                        {
-                            var stack = hulls.GetRandomElement();
-                            new Ship(stack.ShipHull) { Owner = militia.Party };
-                            capacity += stack.ShipHull.TotalCrewCapacity;
-                        }
-                        Logger.LogTrace($"{militia.Name}({militia.StringId}) assigned {militia.Party.Ships.Count} ships for {troopCount} troops (capacity={capacity}).");
-                    }
-                }
-
                 militia.InitializeMobilePartyAtPosition(rosters[0], rosters[1], position);
                 ConfigureMilitia(militia);
                 TrainMilitia(militia);
-
-                if (militia.HasNavalNavigationCapability)
-                {
-                    militia.SetLandNavigationAccess(false);
-                    militia.DesiredAiNavigationType = MobileParty.NavigationType.Naval;
-
-                    // Vanilla PiratesCampaignBehavior.GetSpawnPosition always resolves
-                    // the patrol anchor via NavigationHelper with NavigationType.Naval,
-                    // guaranteeing a valid sea navmesh face. We do the same here so that
-                    // SpawnBM's GatePosition (which may be coastal) is never used raw.
-                    var navalPatrolPos = NavigationHelper.FindPointAroundPosition(
-                        position, MobileParty.NavigationType.Naval, 20f, 0f, true, false);
-
-                    militia.GetBM().NavalPatrolPosition = navalPatrolPos;
-                    militia.SetMovePatrolAroundPoint(navalPatrolPos, MobileParty.NavigationType.Naval);
-                }
 
                 Logger.LogTrace($"{militia.Name}({militia.StringId})[{militia.ActualClan}] initialized with {militia.MemberRoster.TotalRegulars} troops and {militia.MemberRoster.TotalHeroes} heroes. [{militia.MemberRoster.GetTroopRoster()
                     .WhereQ(t => t.Character.IsHero)

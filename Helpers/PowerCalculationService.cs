@@ -57,7 +57,7 @@ namespace BanditMilitias
         /// The returned list is a snapshot — safe to iterate even if parties are
         /// added/removed mid-tick.
         /// </summary>
-        internal static List<ModBanditMilitiaPartyComponent> GetCachedBMs(bool forceRefresh = false)
+        internal static IReadOnlyList<ModBanditMilitiaPartyComponent> GetCachedBMs(bool forceRefresh = false)
         {
             if (forceRefresh || _partyCacheInterval < CampaignTime.Now.ToHours - 1)
             {

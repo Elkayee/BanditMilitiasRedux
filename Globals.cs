@@ -53,7 +53,7 @@ namespace BanditMilitias
 
         // ── Party & Hero Tracking ────────────────────────────────────────────────
 
-        internal static List<ModBanditMilitiaPartyComponent> AllBMs => PowerCalculationService.GetCachedBMs();
+        internal static IReadOnlyList<ModBanditMilitiaPartyComponent> AllBMs => PowerCalculationService.GetCachedBMs();
         internal static List<Hero>            Heroes       = new();
         internal static List<CharacterObject> HeroTemplates = new();
         internal static int RaidCap;
