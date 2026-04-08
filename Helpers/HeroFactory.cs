@@ -183,6 +183,10 @@ namespace BanditMilitias
 
             specialHero.AddPower(MBRandom.RandomFloat * 20f);
             specialHero.ChangeState(Hero.CharacterStates.Active);
+
+            // Set gender BEFORE returning so that RandomizeAppearance (called by
+            // CreateOrReuseHero) reads the correct IsFemale value and generates
+            // gender-appropriate face params.
             specialHero.IsFemale = RollFemale();
 
             Logger.LogTrace($"Created a new hero {specialHero}");

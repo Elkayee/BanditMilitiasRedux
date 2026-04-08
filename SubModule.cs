@@ -93,6 +93,9 @@ namespace BanditMilitias
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {
             harmony.PatchAll(Assembly.GetExecutingAssembly());
+            // Manual patch applied AFTER PatchAll so it registers last and
+            // runs after all other postfixes (including BanditVoiceFix).
+            VoicePatches.ApplyManualPatch(harmony);
             if (gameStarterObject is CampaignGameStarter gameStarter)
                 gameStarter.AddBehavior(new MilitiaBehavior());
             if (Settings.Instance != null)
