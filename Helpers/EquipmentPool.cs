@@ -210,40 +210,40 @@ namespace BanditMilitias
             try
             {
                 var safety = 0;
-                var mountedTroops = troopRoster.GetTroopRoster()
-                    .WhereQ(c => !c.Character.Equipment[10].IsEmpty
-                        && !c.Character.IsHero
-                        && c.Character.OriginalCharacter is null)
-                    .ToListQ();
-                int mountedCount = mountedTroops.SumQ(e => e.Number);
 
                 while (safety++ < 200)
                 {
+                    // Re-query each iteration to get fresh counts after removals
+                    var mountedTroops = troopRoster.GetTroopRoster()
+                        .WhereQ(c => !c.Character.Equipment[10].IsEmpty
+                            && !c.Character.IsHero
+                            && c.Character.OriginalCharacter is null)
+                        .ToListQ();
+                    int mountedCount = mountedTroops.SumQ(e => e.Number);
+
                     int delta = mountedCount - Convert.ToInt32(troopRoster.TotalManCount / 2);
                     if (delta <= 0) break;
                     if (mountedTroops.Count == 0) break;
 
-                    if (safety == 200)
-                    {
-                        InformationManager.DisplayMessage(new InformationMessage(
-                            "Bandit Militias error.  Please open a bug report and include the file cavalry.txt from the mod folder.",
-                            new Color(1, 0, 0)));
-                        var output = new StringBuilder();
-                        output.AppendLine(
-                            $"NumMountedTroops(troopRoster) {mountedCount} - " +
-                            $"Convert.ToInt32(troopRoster.TotalManCount / 2) {Convert.ToInt32(troopRoster.TotalManCount / 2)}");
-                        mountedTroops.Do(t => output.AppendLine($"{t.Character}: {t.Number} ({t.WoundedNumber})"));
-                        File.WriteAllText(
-                            ModuleHelper.GetModuleFullPath("BanditMilitias") + "cavalry.txt",
-                            output.ToString());
-                    }
-
                     var element = mountedTroops.GetRandomElement();
                     var count = Math.Min(element.Number, MBRandom.RandomInt(1, delta + 1));
                     troopRoster.AddToCounts(element.Character, -count);
-                    mountedCount -= count;
-                    if (element.Number - count <= 0)
-                        mountedTroops.Remove(element);
+                }
+
+                if (safety >= 200)
+                {
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "Bandit Militias error.  Please open a bug report and include the file cavalry.txt from the mod folder.",
+                        new Color(1, 0, 0)));
+                    var output = new StringBuilder();
+                    var finalMounted = troopRoster.GetTroopRoster()
+                        .WhereQ(c => !c.Character.Equipment[10].IsEmpty && !c.Character.IsHero)
+                        .ToListQ();
+                    output.AppendLine($"Mounted: {finalMounted.SumQ(e => e.Number)}, Total: {troopRoster.TotalManCount}");
+                    finalMounted.Do(t => output.AppendLine($"{t.Character}: {t.Number} ({t.WoundedNumber})"));
+                    File.WriteAllText(
+                        ModuleHelper.GetModuleFullPath("BanditMilitias") + "cavalry.txt",
+                        output.ToString());
                 }
             }
             catch (Exception ex)

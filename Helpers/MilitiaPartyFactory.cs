@@ -282,6 +282,7 @@ namespace BanditMilitias
                 return false;
 
             int roll = MBRandom.RandomInt(0, 101);
+
             if (roll > Globals.Settings.RandomSplitChance
                 || mobileParty.Party.MemberRoster.TotalManCount > Math.Max(1, CalculatedMaxPartySize * ReductionFactor))
             {
@@ -484,6 +485,13 @@ namespace BanditMilitias
         {
             Logger.LogDebug($"ConfigureMilitia: START {mobileParty?.StringId}, LeaderHero={mobileParty?.LeaderHero?.Name.ToString() ?? "NULL"}, GetBM().Leader={mobileParty?.GetBM()?.Leader?.Name.ToString() ?? "NULL"}");
 
+            // Guard: LeaderHero can be null if CreateHero failed during component construction
+            if (mobileParty.LeaderHero is null || mobileParty.GetBM()?.Leader is null)
+            {
+                Logger.LogError($"ConfigureMilitia: skipping — no leader for {mobileParty?.StringId}");
+                return;
+            }
+
             mobileParty.LeaderHero.Gold = Convert.ToInt32(mobileParty.Party.EstimatedStrength * GoldMap.ElementAt(Globals.Settings.GoldReward.SelectedIndex).Value);
             Logger.LogDebug($"ConfigureMilitia: Gold set");
 
@@ -520,19 +528,25 @@ namespace BanditMilitias
                 if (!Globals.Settings.CanTrain || MilitiaPowerPercent > Globals.Settings.GlobalPowerPercent)
                     return;
 
-                int iterations = default;
-                switch (Globals.Settings.XpGift.SelectedValue)
+                // Use SelectedIndex instead of SelectedValue — SelectedValue contains
+                // the localized display text which won't match in non-English locales.
+                int iterations;
+                switch (Globals.Settings.XpGift.SelectedIndex)
                 {
-                    case "Off":
+                    case 0:  // Off
+                        iterations = 0;
                         break;
-                    case "Normal":
+                    case 1:  // Normal
                         iterations = 1;
                         break;
-                    case "Hard":
+                    case 2:  // Hard
                         iterations = 2;
                         break;
-                    case "Hardest":
+                    case 3:  // Hardest
                         iterations = 4;
+                        break;
+                    default:
+                        iterations = 0;
                         break;
                 }
 
@@ -544,16 +558,19 @@ namespace BanditMilitias
                     if (allLooters.Any())
                     {
                         var culture = Helper.GetMostPrevalentFromNearbySettlements(mobileParty.Position.ToVec2());
-                        foreach (var looter in allLooters)
+                        if (Globals.Recruits.TryGetValue(culture, out var cultureRecruits) && cultureRecruits.Count > 0)
                         {
-                            number = looter.Number;
-                            numberToUpgrade = Convert.ToInt32(number * Globals.Settings.UpgradeUnitsPercent / 100f);
-                            if (numberToUpgrade == 0)
-                                continue;
+                            foreach (var looter in allLooters)
+                            {
+                                number = looter.Number;
+                                numberToUpgrade = Convert.ToInt32(number * Globals.Settings.UpgradeUnitsPercent / 100f);
+                                if (numberToUpgrade == 0)
+                                    continue;
 
-                            mobileParty.MemberRoster.AddToCounts(Globals.Looters.BasicTroop, -numberToUpgrade);
-                            var recruit = Globals.Recruits[culture][MBRandom.RandomInt(0, Globals.Recruits[culture].Count)];
-                            mobileParty.MemberRoster.AddToCounts(recruit, numberToUpgrade);
+                                mobileParty.MemberRoster.AddToCounts(Globals.Looters.BasicTroop, -numberToUpgrade);
+                                var recruit = cultureRecruits[MBRandom.RandomInt(0, cultureRecruits.Count)];
+                                mobileParty.MemberRoster.AddToCounts(recruit, numberToUpgrade);
+                            }
                         }
                     }
                 }

@@ -112,18 +112,26 @@ namespace BanditMilitias
                                 return;
                             }
 
-                            if (target is not null && target.Owner is not null && BM.Avoidance is not null)
+                            if (target is not null && target.OwnerClan is not null && BM.Avoidance is not null)
                             {
-                                if (BM.Avoidance.ContainsKey(target.Owner)
-                                    && MBRandom.RandomFloat * 100f <= BM.Avoidance[target.Owner])
+                                // Check avoidance against all heroes in the owning clan,
+                                // not just the clan leader — the lord who defeated us
+                                // might be a vassal, not the clan leader
+                                foreach (var clanHero in target.OwnerClan.Heroes)
                                 {
-                                    Logger.LogTrace($"{mobileParty.Name}({mobileParty.StringId}) avoided pillaging {target}");
-                                    break;
+                                    if (clanHero is not null
+                                        && BM.Avoidance.TryGetValue(clanHero, out var avoidanceValue)
+                                        && MBRandom.RandomFloat * 100f <= avoidanceValue)
+                                    {
+                                        Logger.LogTrace($"{mobileParty.Name}({mobileParty.StringId}) avoided pillaging {target} (fears {clanHero.Name})");
+                                        target = null;
+                                        break;
+                                    }
                                 }
-                            }
 
-                            if (target is null)
-                                break;
+                                if (target is null)
+                                    break;
+                            }
 
                             if (target.OwnerClan == Hero.MainHero.Clan)
                                 InformationManager.DisplayMessage(new InformationMessage($"{mobileParty.Name} is raiding your village {target.Name} near {target.Town?.Name}!"));
@@ -275,12 +283,18 @@ namespace BanditMilitias
                         continue;
                     }
 
-                    // Ensure the home settlement is a land hideout
-                    var settlement = validHideouts
+                    // Filter land hideouts; if none exist at all, skip this spawn attempt
+                    var landHideouts = validHideouts
                         .WhereQ(s => Helper.IsLandHideout(s))
-                        .ToListQ()
-                        .GetRandomElement()
-                        ?? baseSettlement;
+                        .ToListQ();
+
+                    if (landHideouts.Count == 0)
+                    {
+                        Logger.LogDebug("SpawnBM: no land hideouts available, skipping.");
+                        continue;
+                    }
+
+                    var settlement = landHideouts.GetRandomElement();
 
                     var min = Convert.ToInt32(Globals.Settings.MinPartySize);
                     var max = Convert.ToInt32(CalculatedMaxPartySize);

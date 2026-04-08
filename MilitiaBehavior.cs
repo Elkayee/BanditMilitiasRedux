@@ -415,8 +415,10 @@ namespace BanditMilitias
                     }
                 }
 
-                // cancel merge if the target has changed its behavior
-                if (mobileParty.DefaultBehavior == AiBehavior.EngageParty
+                // Cancel merge if the target has changed its behavior
+                // Only applies to BMs — vanilla bandits should not have their engage cancelled
+                if (isBM
+                    && mobileParty.DefaultBehavior == AiBehavior.EngageParty
                     && mobileParty.TargetParty is not null
                     && !FactionManager.IsAtWarAgainstFaction(mobileParty.MapFaction, mobileParty.TargetParty.MapFaction))
                 {
@@ -455,7 +457,6 @@ namespace BanditMilitias
                 // BM changed too recently?
                 if (isBM)
                 {
-                    // FIX: Guard GetBM() null check and LastMergedOrSplitDate access
                     var bm = mobileParty.GetBM();
                     if (bm?.LastMergedOrSplitDate != null
                         && CampaignTime.Now < bm.LastMergedOrSplitDate + CampaignTime.Hours(Globals.Settings?.CooldownHours ?? 2))
@@ -463,6 +464,16 @@ namespace BanditMilitias
                         BMThink(mobileParty);
                         return;
                     }
+                }
+
+                // Don't start merge logic if the player is actively chasing this party.
+                // Merging destroys the party mid-pursuit, causing the player's target to vanish.
+                if (MobileParty.MainParty.ShortTermBehavior == AiBehavior.EngageParty
+                    && MobileParty.MainParty.ShortTermTargetParty == mobileParty)
+                {
+                    if (isBM)
+                        BMThink(mobileParty);
+                    return;
                 }
 
                 List<MobileParty> nearbyBandits = new List<MobileParty>();
@@ -518,6 +529,11 @@ namespace BanditMilitias
                     }
 
                     if (mobilePartyMountedCount + NumMountedTroops(target.MemberRoster) > militiaTotalCount / 2)
+                        continue;
+
+                    // Don't merge with a party the player is actively chasing
+                    if (MobileParty.MainParty.ShortTermBehavior == AiBehavior.EngageParty
+                        && MobileParty.MainParty.ShortTermTargetParty == target)
                         continue;
 
                     mergeTarget = target;
@@ -608,7 +624,8 @@ namespace BanditMilitias
             dataStore.SyncData("Heroes", ref Heroes);
             if (dataStore.IsLoading)
             {
-                Globals.Heroes.RemoveAll(hero => !Hero.AllAliveHeroes.Contains(hero));
+                Heroes ??= new List<Hero>();
+                Globals.Heroes.RemoveAll(hero => hero is null || !Hero.AllAliveHeroes.Contains(hero));
             }
         }
     }

@@ -84,8 +84,7 @@ namespace BanditMilitias
         protected override void OnInitialize()
         {
             base.OnInitialize();
-            if (!IsBandit(MobileParty))
-                IsBandit(MobileParty) = true;
+            IsBandit(MobileParty) = true;
             OnWarPartyRemoved.Invoke(Clan, [this]);
         }
 
@@ -98,14 +97,15 @@ namespace BanditMilitias
 
             hero ??= CreateHero(settlement);
 
-            _bornSettlement(hero) = settlement;
+            if (hero is null)
+            {
+                Logger.LogError($"Failed to create hero for BM at {settlement?.Name} — party will be leaderless.");
+                homeSettlement = settlement;
+                return;
+            }
 
-            // Assign the bandit clan to the hero. Verified safe from KillCharacterAction source:
-            // - IsBanditFaction guard prevents DestroyClanAction from firing
-            // - GiveGoldAction targets the bandit faction dummy leader — harmless void
-            // - No kingdom succession logic applies to bandit faction heroes
+            _bornSettlement(hero) = settlement;
             hero.Clan = _targetClan;
-            //hero.UpdateHomeSettlement();
             HiddenInEncyclopedia(hero.CharacterObject) = true;
             homeSettlement = settlement;
             leader = hero;

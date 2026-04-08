@@ -53,7 +53,6 @@ namespace BanditMilitias.Patches
         private static readonly AccessTools.FieldRef<MobilePartyAi, MobileParty> getMobileParty =
             AccessTools.FieldRefAccess<MobilePartyAi, MobileParty>("_mobileParty");
 
-        // Merge bandit parties when they are engaged with each other
         [HarmonyPatch(typeof(EncounterManager), nameof(EncounterManager.StartPartyEncounter))]
         public static class MobilePartyOnPartyInteraction
         {
@@ -64,6 +63,14 @@ namespace BanditMilitias.Patches
                     FactionManager.IsAtWarAgainstFaction(attackerParty.MapFaction, defenderParty.MapFaction) ||
                     attackerParty.MobileParty.IsUsedByAQuest() || defenderParty.MobileParty.IsUsedByAQuest())
                     return true;
+
+                // Don't merge parties the player is actively chasing — 
+                // merging destroys them mid-pursuit, causing ghost pauses and lost targets
+                if (MobileParty.MainParty.ShortTermBehavior == AiBehavior.EngageParty
+                    && (MobileParty.MainParty.ShortTermTargetParty == attackerParty.MobileParty
+                        || MobileParty.MainParty.ShortTermTargetParty == defenderParty.MobileParty))
+                    return true;
+
                 TryMergeParties(attackerParty.MobileParty, defenderParty.MobileParty);
                 return false;
             }
@@ -336,7 +343,7 @@ namespace BanditMilitias.Patches
             }
         }
 
-        // prevent militias from attacking parties they can destroy easily
+        // Prevent militias from attacking parties they can destroy easily
         [HarmonyPatch(typeof(MobilePartyAi), "SetAiBehavior")]
         public static class MobilePartyCanAttackPatch
         {
@@ -365,9 +372,28 @@ namespace BanditMilitias.Patches
 
                 var party1Strength = attacker.GetTotalLandStrengthWithFollowers();
                 var party2Strength = targetParty.GetTotalLandStrengthWithFollowers();
-                float delta = Math.Abs(party1Strength - party2Strength);
-                var deltaPercent = delta / party1Strength * 100;
-                return deltaPercent <= Globals.Settings.MaxStrengthDeltaPercent;
+
+                if (party1Strength <= 0)
+                    return true;
+
+                if (party2Strength > party1Strength)
+                {
+                    // Target is stronger — check against MaxStrongerTargetPercent
+                    // 100 = attack regardless of how strong the target is
+                    if (Globals.Settings.MaxStrongerTargetPercent >= 100)
+                        return true;
+                    var deltaPercent = (party2Strength - party1Strength) / party1Strength * 100;
+                    return deltaPercent <= Globals.Settings.MaxStrongerTargetPercent;
+                }
+                else
+                {
+                    // Target is weaker — check against MaxWeakerTargetPercent
+                    // 100 = attack regardless of how weak the target is
+                    if (Globals.Settings.MaxWeakerTargetPercent >= 100)
+                        return true;
+                    var deltaPercent = (party1Strength - party2Strength) / party1Strength * 100;
+                    return deltaPercent <= Globals.Settings.MaxWeakerTargetPercent;
+                }
             }
         }
 
@@ -574,11 +600,18 @@ namespace BanditMilitias.Patches
             }
         }
 
-        // 1.9 broke this
         [HarmonyPatch(typeof(MobileParty), "IsBanditBossParty", MethodType.Getter)]
         public class MobilePartyIsBanditBossParty
         {
-            public static bool Prefix(MobileParty __instance) => !__instance.IsBM();
+            public static bool Prefix(MobileParty __instance, ref bool __result)
+            {
+                if (__instance.IsBM())
+                {
+                    __result = false;
+                    return false;
+                }
+                return true;
+            }
         }
 
         // bandit heroes' home settlements will be their born settlements if there is none

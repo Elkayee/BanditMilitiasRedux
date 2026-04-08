@@ -58,10 +58,9 @@ namespace BanditMilitias.Patches
                 if (!__instance.HasWinner)
                     return;
 
-                var loserBMs = __instance.PartiesOnSide(__instance.DefeatedSide)
-                    .WhereQ(p => p.Party?.MobileParty?.PartyComponent is ModBanditMilitiaPartyComponent);
-
-                DoPowerCalculations();
+                // Only recalculate when a BM is involved — this fires on every battle in the world
+                if (__instance.InvolvedParties.AnyQ(p => p?.IsMobile == true && p.MobileParty?.IsBM() == true))
+                    DoPowerCalculations();
             }
 
             public static void Postfix(MapEvent __instance)

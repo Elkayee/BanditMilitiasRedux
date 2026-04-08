@@ -146,21 +146,20 @@ namespace BanditMilitias
                          .WhereQ(s => s.Party.PrisonRoster.GetTroopRoster()
                              .AnyQ(e => e.Character.StringId.EndsWith("Bandit_Militia"))))
             {
-                for (var i = 0; i < settlement.Party.PrisonRoster.Count; i++)
-                    try
+                for (var i = settlement.Party.PrisonRoster.Count - 1; i >= 0; i--)
+                try
+                {
+                    var prisoner = settlement.Party.PrisonRoster.GetCharacterAtIndex(i);
+                    if (prisoner.StringId.EndsWith("Bandit_Militia"))
                     {
-                        var prisoner = settlement.Party.PrisonRoster.GetCharacterAtIndex(i);
-                        if (prisoner.StringId.EndsWith("Bandit_Militia"))
-                        {
-                            Logger.LogTrace($">>> FLUSH BM hero prisoner {prisoner.HeroObject?.Name} at {settlement.Name}.");
-                            settlement.Party.PrisonRoster.AddToCounts(prisoner, -1);
-                            KillCharacterAction.ApplyByRemove(prisoner.HeroObject);
-                        }
+                        settlement.Party.PrisonRoster.AddToCounts(prisoner, -1);
+                        KillCharacterAction.ApplyByRemove(prisoner.HeroObject);
                     }
-                    catch (Exception ex)
-                    {
-                        Logger.LogError(ex, $"Error flushing {settlement}");
-                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, $"Error flushing {settlement}");
+                }
             }
 
             var leftovers = Hero.AllAliveHeroes.WhereQ(h => h.StringId.EndsWith("Bandit_Militia")).ToListQ();
@@ -343,10 +342,9 @@ namespace BanditMilitias
 
             foreach (var loserHero in loserHeroes)
             {
+                // Only decrease existing avoidance — winning doesn't create new fear
                 if (bm.Avoidance.TryGetValue(loserHero, out _))
-                    bm.Avoidance[loserHero] -= MilitiaBehavior.Increment;
-                else
-                    bm.Avoidance.Add(loserHero, MBRandom.RandomInt(15, 35));
+                    bm.Avoidance[loserHero] = Math.Max(0, bm.Avoidance[loserHero] - MilitiaBehavior.Increment);
             }
         }
 
@@ -355,7 +353,8 @@ namespace BanditMilitias
             T.Restart();
             Logger.LogTrace("MapScreen.OnInitialize");
             ClearGlobals();
-            SubModule.CacheBanners();
+            if (Banners.Count == 0)
+                SubModule.CacheBanners();
             EquipmentPool.Populate();
             BlackFlag = MBObjectManager.Instance.GetObject<CultureObject>("ad_bandit_blackflag");
             Looters = Clan.BanditFactions.First(c => c.StringId == "looters");

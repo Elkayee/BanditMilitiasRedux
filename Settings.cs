@@ -87,19 +87,23 @@ namespace BanditMilitias
 
         // ==================== BEHAVIOR & AI ====================
 
-        [SettingPropertyInteger("{=BMWeaker}Attack Strength Tolerance %", 0, 100, Order = 0, RequireRestart = false, HintText = "{=BMWeakerDesc}BMs will not engage parties stronger than themselves by more than this %. 100 means attack regardless of strength difference.")]
+        [SettingPropertyInteger("{=BMStronger}Max Stronger Target %", 0, 100, Order = 0, RequireRestart = false, HintText = "{=BMStrongerDesc}BMs will not engage parties stronger than themselves by more than this %. 100 means attack regardless of how strong the target is.")]
         [SettingPropertyGroup("{=BMAIBehavior}Behavior & AI", GroupOrder = 3)]
-        public int MaxStrengthDeltaPercent { get; private set; } = 50;
+        public int MaxStrongerTargetPercent { get; private set; } = 50;
 
-        [SettingPropertyBool("{=BMIgnore}Ignore Villagers & Caravans", Order = 1, RequireRestart = false, HintText = "{=BMIgnoreDesc}Bandit Militias will not attack villagers or caravans.")]
+        [SettingPropertyInteger("{=BMWeaker}Max Weaker Target %", 0, 100, Order = 1, RequireRestart = false, HintText = "{=BMWeakerDesc}BMs will not engage parties weaker than themselves by more than this %. 100 means attack regardless of how weak the target is.")]
+        [SettingPropertyGroup("{=BMAIBehavior}Behavior & AI")]
+        public int MaxWeakerTargetPercent { get; private set; } = 50;
+
+        [SettingPropertyBool("{=BMIgnore}Ignore Villagers & Caravans", Order = 2, RequireRestart = false, HintText = "{=BMIgnoreDesc}Bandit Militias will not attack villagers or caravans.")]
         [SettingPropertyGroup("{=BMAIBehavior}Behavior & AI")]
         public bool IgnoreVillagersCaravans { get; private set; } = false;
 
-        [SettingPropertyBool("{=BMPillage}Enable Village Raiding", Order = 2, RequireRestart = false, HintText = "{=BMPillageDesc}Allow Bandit Militias to raid villages.")]
+        [SettingPropertyBool("{=BMPillage}Enable Village Raiding", Order = 3, RequireRestart = false, HintText = "{=BMPillageDesc}Allow Bandit Militias to raid villages.")]
         [SettingPropertyGroup("{=BMAIBehavior}Behavior & AI")]
         public bool AllowPillaging { get; private set; } = true;
 
-        [SettingPropertyFloatingInteger("{=BMPillageChance}Hourly Raid Chance %", 0, 100, Order = 3, RequireRestart = false, HintText = "{=BMPillageChanceDesc}Each hour every Bandit Militia has this % chance to consider raiding a nearby village. Keep this low.")]
+        [SettingPropertyFloatingInteger("{=BMPillageChance}Hourly Raid Chance %", 0, 100, Order = 4, RequireRestart = false, HintText = "{=BMPillageChanceDesc}Each hour every Bandit Militia has this % chance to consider raiding a nearby village. Keep this low.")]
         [SettingPropertyGroup("{=BMAIBehavior}Behavior & AI")]
         public float PillagingChance { get; private set; } = 1;
 

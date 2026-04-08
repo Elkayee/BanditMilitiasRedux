@@ -47,8 +47,8 @@ namespace BanditMilitias
             RunManualPatches();
         }
 
-        // need to cache the banners before CEK adds background colours which
-        // causes custom banners to crash for reasons unknown
+        // Need to cache the banners before CEK adds background colours which
+        // Causes custom banners to crash for reasons unknown
         internal static void CacheBanners()
         {
             for (var i = 0; i < 5000; i++)
@@ -70,6 +70,7 @@ namespace BanditMilitias
             }
             Globals.Settings!.XpGift = new(Globals.DifficultyXpMap.Keys.SelectQ(k => k.ToString()), 1);
             Globals.Settings!.GoldReward = new(Globals.GoldMap.Keys.SelectQ(k => k.ToString()), 1);
+            AdjustForLoadOrder();
             Logger.LogInformation($"{Globals.Settings!.DisplayName} starting up...");
         }
 

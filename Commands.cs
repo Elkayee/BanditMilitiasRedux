@@ -104,7 +104,6 @@ internal class Commands
         try
         {
             Logger.LogInformation("Clearing mod data.");
-            // no idea why it takes several iterations to clean up certain situations, but it does
             for (int index = 0; index < 1; index++)
             {
                 Nuke();
